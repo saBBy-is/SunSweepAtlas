@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Product_Observational xmlns="http://pds.nasa.gov/pds4/pds/v1" xmlns:geom="http://pds.nasa.gov/pds4/geom/v1">
+    <Observation_Area>
+        <Time_Coordinates>
+            <start_date_time>2020-01-01T00:00:00Z</start_date_time>
+        </Time_Coordinates>
+        <Investigation_Area>
+            <name>CHANDRAYAAN-2</name>
+        </Investigation_Area>
+        <Discipline_Area>
+            <geom:Geometry>
+                <geom:sun_azimuth_angle unit="deg">145.23</geom:sun_azimuth_angle>
+                <geom:sun_elevation_angle unit="deg">22.45</geom:sun_elevation_angle>
+            </geom:Geometry>
+        </Discipline_Area>
+    </Observation_Area>
+</Product_Observational>

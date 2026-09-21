@@ -1,0 +1,11 @@
+gdal>=3.4.1
+numpy
+opencv-python
+kornia
+torch
+torchvision
+matplotlib
+scipy
+vismatch
+tqdm
+pds4_tools

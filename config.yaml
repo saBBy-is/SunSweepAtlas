@@ -1,0 +1,12 @@
+grid:
+  azimuth: [0, 45, 90, 135, 180, 225, 270, 315]
+  elevation: [3, 5, 10, 20, 30, 45, 60, 80]
+reference:
+  azimuth: 270
+  elevation: 40
+success:
+  max_error_px: 3.0
+  min_correct_matches: 20
+protocols:
+  - raw
+  - stretch_2_98
