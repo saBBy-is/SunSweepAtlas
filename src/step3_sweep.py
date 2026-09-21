@@ -2,10 +2,30 @@ import yaml
 import numpy as np
 import time
 import cv2
+import hashlib
 from PIL import Image
 import os
+import sys
 import vismatch
 import warnings
+from datetime import datetime, timezone
+
+# ── Simulator integrity check ─────────────────────────────────────
+_sweep_dir = os.path.dirname(os.path.abspath(__file__))
+_EXPECTED_HASHES = {
+    os.path.join(_sweep_dir, "sun_sim_v2.py"): "eb05f657168a53c99b8be71ee9c634d67eadcb82fb2a9da824afd36530b9a79b",
+    os.path.join(_sweep_dir, "synth_dem.py"):   "841ba178ac8b1d1833ac9cb121083cd1446f895e5f0b6b96280e291b97dc1a9a",
+}
+for _path, _expected in _EXPECTED_HASHES.items():
+    with open(_path, "rb") as _fh:
+        _actual = hashlib.sha256(_fh.read()).hexdigest()
+    if _actual != _expected:
+        print(f"INTEGRITY ERROR: {os.path.basename(_path)} has been modified!")
+        print(f"  Expected SHA-256: {_expected}")
+        print(f"  Actual   SHA-256: {_actual}")
+        print("Refusing to run. Restore the original file or update SIMULATOR_HASHES.txt.")
+        sys.exit(1)
+
 from sun_sim_v2 import horizon_map, render, to_uint8
 from synth_dem import make_dem
 
@@ -120,9 +140,11 @@ if __name__ == '__main__':
     if os.path.exists(csv_file):
         os.remove(csv_file)
     with open(csv_file, 'w') as f:
-        f.write("matcher,protocol,factor,az,el,matches,correct,grid_err,success,runtime,terrain_id\n")
+        f.write("matcher,protocol,factor,az,el,matches,correct,grid_err,success,runtime,terrain_id,timestamp\n")
             
-    print("\nRunning full synthetic sweep (fast matchers)...")
+    print("\nRunning full synthetic sweep (all matchers)...")
+    total_cells = len(azs) * len(els) * len(passed_matchers) * len(protos) * len(factors)
+    cell_num = 0
     for az in azs:
         h_az = horizon_map(dem, 20.0, az)
         for el in els:
@@ -135,6 +157,7 @@ if __name__ == '__main__':
                     img_target_p = apply_protocol(img_target, proto)
                     
                     for factor in factors:
+                        cell_num += 1
                         if factor == 'A_identity':
                             i1, i2, M_gt = img_ref_p, img_target_p, np.eye(2, 3)
                         else:
@@ -147,8 +170,12 @@ if __name__ == '__main__':
                             continue
                             
                         tot, corr, succ, merr = evaluate_matches(pts1, pts2, M_gt)
+                        ts = datetime.now(timezone.utc).isoformat()
                         
                         with open(csv_file, 'a') as f:
-                            f.write(f"{m},{proto},{factor},{az},{el},{tot},{corr},{merr:.3f},{succ},{rtime:.3f},synth01\n")
+                            f.write(f"{m},{proto},{factor},{az},{el},{tot},{corr},{merr:.3f},{succ},{rtime:.3f},synth01,{ts}\n")
+                        
+                        if cell_num % 10 == 0 or cell_num == total_cells:
+                            print(f"  [{cell_num}/{total_cells}] {m} | az={az} el={el} | {proto} | {factor} | corr={corr}/{tot} | {succ}")
                             
-    print("Full synthetic sweep complete! Generated atlas.csv")
+    print(f"\nFull synthetic sweep complete! {cell_num} cells written to {csv_file}")

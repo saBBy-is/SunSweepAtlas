@@ -1,0 +1,8 @@
+# SIMULATOR_HASHES.txt
+# SHA-256 hashes of the frozen simulator files.
+# Baseline commit: 2f8694ab173493c063706ba64542685e7d8e6a5b
+# These files are read-only after this commit. Any modification will
+# cause demo.py and step3_sweep.py to refuse to run.
+
+src/sun_sim_v2.py  eb05f657168a53c99b8be71ee9c634d67eadcb82fb2a9da824afd36530b9a79b
+src/synth_dem.py   841ba178ac8b1d1833ac9cb121083cd1446f895e5f0b6b96280e291b97dc1a9a

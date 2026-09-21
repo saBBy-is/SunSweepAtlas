@@ -11,10 +11,25 @@ Usage:
 
 Fallback outputs in  demo_fallback/
 """
-import sys, os, time, argparse
+import sys, os, time, argparse, hashlib
+
+# ── Simulator integrity check ─────────────────────────────────────
+_here = os.path.dirname(os.path.abspath(__file__))
+_EXPECTED_HASHES = {
+    os.path.join(_here, "src", "sun_sim_v2.py"): "eb05f657168a53c99b8be71ee9c634d67eadcb82fb2a9da824afd36530b9a79b",
+    os.path.join(_here, "src", "synth_dem.py"):   "841ba178ac8b1d1833ac9cb121083cd1446f895e5f0b6b96280e291b97dc1a9a",
+}
+for _path, _expected in _EXPECTED_HASHES.items():
+    with open(_path, "rb") as _fh:
+        _actual = hashlib.sha256(_fh.read()).hexdigest()
+    if _actual != _expected:
+        print(f"INTEGRITY ERROR: {os.path.basename(_path)} has been modified!")
+        print(f"  Expected SHA-256: {_expected}")
+        print(f"  Actual   SHA-256: {_actual}")
+        print("Refusing to run. Restore the original file or update SIMULATOR_HASHES.txt.")
+        sys.exit(1)
 
 # ── path setup (works from project root) ──────────────────────────
-_here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_here, "src"))
 
 import numpy as np
