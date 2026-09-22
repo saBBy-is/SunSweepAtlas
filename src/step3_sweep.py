@@ -67,8 +67,10 @@ def evaluate_matches(pts1, pts2, M_gt):
     return len(pts1), correct, success, mean_err
 
 def run_matcher(m_name, img1, img2):
-    os.makedirs('data/scratch', exist_ok=True)
-    p1, p2 = 'data/scratch/m1.png', 'data/scratch/m2.png'
+    _proj = os.path.dirname(_sweep_dir)
+    scratch = os.path.join(_proj, 'data', 'scratch')
+    os.makedirs(scratch, exist_ok=True)
+    p1, p2 = os.path.join(scratch, 'm1.png'), os.path.join(scratch, 'm2.png')
     Image.fromarray(img1).save(p1)
     Image.fromarray(img2).save(p2)
     start = time.time()
@@ -115,7 +117,9 @@ def apply_protocol(img, proto):
     return img
 
 if __name__ == '__main__':
-    with open('config.yaml', 'r') as f:
+    _project_root = os.path.dirname(_sweep_dir)  # parent of src/
+    config_path = os.path.join(_project_root, 'config.yaml')
+    with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
     dem = make_dem(512, 20)
@@ -135,8 +139,9 @@ if __name__ == '__main__':
     protos = config['protocols']
     factors = ['A_identity', 'B_affine']
     
-    os.makedirs('results', exist_ok=True)
-    csv_file = 'results/atlas.csv'
+    results_dir = os.path.join(_project_root, 'results')
+    os.makedirs(results_dir, exist_ok=True)
+    csv_file = os.path.join(results_dir, 'atlas.csv')
     if os.path.exists(csv_file):
         os.remove(csv_file)
     with open(csv_file, 'w') as f:

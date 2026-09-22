@@ -1,12 +1,45 @@
+# config.yaml — LunarAlign Sun-Sweep Atlas configuration
+# Committed BEFORE running any sweep; the sweep reads this file.
+# Changing this file after results exist invalidates the sweep.
+#
+# PPT-specified grid (slide 6 of SIH 2026 deck, locked 2026-09-23):
+#   delta-azimuth: 0, 45, 90, 135, 180  (5 levels)
+#   elevation: 10, 40                    (2 levels)
+#   Reference illumination: az=270, el=40
+#
+# Success criterion (must be stated before seeing any results):
+#   A cell is SUCCESS if BOTH:
+#     (a) mean grid-reprojection error < 3.0 px  (10x10 grid, 100 points)
+#     (b) number of correct matches (within 3 px) >= 20
+#   This criterion is evaluated identically for every matcher, cell, protocol, factor.
+
 grid:
-  azimuth: [0, 45, 90, 135, 180, 225, 270, 315]
-  elevation: [3, 5, 10, 20, 30, 45, 60, 80]
+  # Delta-azimuths relative to reference (az=270).
+  # Absolute azimuths = (270 + delta) mod 360
+  delta_azimuth: [0, 45, 90, 135, 180]
+  # Sun elevation angles in degrees
+  elevation: [10, 40]
+
 reference:
-  azimuth: 270
-  elevation: 40
+  azimuth: 270    # degrees clockwise from north
+  elevation: 40   # degrees above horizon
+
+# Pre-run success criterion (read-only after this commit)
 success:
-  max_error_px: 3.0
-  min_correct_matches: 20
+  max_grid_error_px: 3.0       # mean reprojection error over 10x10 grid
+  min_correct_matches: 20      # matches within 3.0 px of GT transform
+
+# Image pre-processing protocols tested
 protocols:
-  - raw
-  - stretch_2_98
+  - raw                        # no processing
+  - stretch_2_98               # contrast stretch to [2nd, 98th] percentile
+
+# Geometric transforms tested
+factors:
+  - A_identity                 # same geometry, different illumination only
+  - B_affine                   # 2° rotation, 1.1x scale, (5,-3) translation
+affine_params:
+  rotation_deg: 2.0
+  scale: 1.1
+  tx_px: 5.0
+  ty_px: -3.0
