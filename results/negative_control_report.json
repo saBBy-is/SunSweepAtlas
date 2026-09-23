@@ -1,0 +1,26 @@
+{
+  "minima": {
+    "matcher": "minima",
+    "raw_matches": 71,
+    "correct_matches_vs_identity": 1,
+    "grid_error_vs_identity": "114.89979442787336",
+    "success_criterion_met": false,
+    "ransac_valid": true,
+    "ransac_inliers": 22,
+    "ransac_reason": "Success (22 inliers, det=1.061)",
+    "produced_red_refusal": true,
+    "runtime_s": 17.723
+  },
+  "sift": {
+    "matcher": "sift",
+    "raw_matches": 18,
+    "correct_matches_vs_identity": 0,
+    "grid_error_vs_identity": "inf",
+    "success_criterion_met": false,
+    "ransac_valid": false,
+    "ransac_inliers": 0,
+    "ransac_reason": "Insufficient matches (18 < 20)",
+    "produced_red_refusal": true,
+    "runtime_s": 0.211
+  }
+}
