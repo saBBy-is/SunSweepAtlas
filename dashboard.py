@@ -225,119 +225,327 @@ def build_atlas_rates(rows):
 
 
 def make_polar_compass(az_deg, el_deg):
-    """Render a mission-control style compass showing azimuth needle and elevation fill."""
+    """Premium multi-ring HUD compass with azimuth needle, elevation fill, and tick marks."""
     theta_rad = math.radians(az_deg)
     nx = math.sin(theta_rad)
     ny = math.cos(theta_rad)
+    ring_t = list(range(0, 361))
 
+    # Elevation normalization (high el = small fill, low el = large fill)
     el_norm = 1.0 - el_deg / 90.0
-    el_r = max(0, 255 - int(el_deg * 2))
-    el_g = min(255, 60 + int(el_deg * 2.4))
-    el_fill_color = f"rgba({el_r},{el_g},180,0.18)"
+    # Color shifts: low elevation → warm amber, high → cool cyan
+    el_hue_r = max(0, 255 - int(el_deg * 2.5))
+    el_hue_g = min(255, 80 + int(el_deg * 2))
+    el_fill = f"rgba({el_hue_r},{el_hue_g},200,0.12)"
+    el_edge = f"rgba({el_hue_r},{el_hue_g},200,0.35)"
 
     fig = go.Figure()
 
-    # Outer ring
-    ring_t = list(range(0, 361))
-    fig.add_trace(go.Scatter(
-        x=[math.sin(math.radians(t)) for t in ring_t],
-        y=[math.cos(math.radians(t)) for t in ring_t],
-        mode="lines", line=dict(color="#1e3558", width=1.5),
-        showlegend=False, hoverinfo="skip",
-    ))
-
-    # Middle ring
-    fig.add_trace(go.Scatter(
-        x=[0.6 * math.sin(math.radians(t)) for t in ring_t],
-        y=[0.6 * math.cos(math.radians(t)) for t in ring_t],
-        mode="lines", line=dict(color="#111d30", width=1, dash="dot"),
-        showlegend=False, hoverinfo="skip",
-    ))
-
-    # Elevation fill arc
-    el_r_pts = [el_norm] * 361 + [0]
-    fig.add_trace(go.Scatter(
-        x=[el_norm * math.sin(math.radians(t)) for t in range(0, 361)] + [0],
-        y=[el_norm * math.cos(math.radians(t)) for t in range(0, 361)] + [0],
-        fill="toself", fillcolor=el_fill_color,
-        line=dict(color="rgba(42,100,150,0.4)", width=1),
-        showlegend=False, hoverinfo="skip", mode="lines",
-    ))
-
-    # Cardinal labels
-    for angle, label in [(0, "N"), (90, "E"), (180, "S"), (270, "W")]:
-        r_label = 1.18
-        fig.add_annotation(
-            x=math.sin(math.radians(angle)) * r_label,
-            y=math.cos(math.radians(angle)) * r_label,
-            text=f"<b>{label}</b>", showarrow=False,
-            font=dict(color="#5b7ba8", size=10, family="Share Tech Mono"),
-            xref="x", yref="y",
-        )
-
-    # 45° tick labels
-    for angle in [45, 135, 225, 315]:
-        fig.add_annotation(
-            x=math.sin(math.radians(angle)) * 1.10,
-            y=math.cos(math.radians(angle)) * 1.10,
-            text=f"{angle}°", showarrow=False,
-            font=dict(color="#2a4060", size=7, family="Share Tech Mono"),
-            xref="x", yref="y",
-        )
-
-    # Crosshairs
-    for a in [0, 90, 180, 270]:
+    # ── Concentric rings (outer → inner) for depth ────────────────────────
+    for r, c, w, d in [
+        (1.00, "#1e3a5f", 1.8, None),
+        (0.80, "#142a45", 1.0, "dot"),
+        (0.60, "#0f2035", 0.8, "dot"),
+        (0.40, "#0a1828", 0.6, "dot"),
+        (0.20, "#08121e", 0.4, "dot"),
+    ]:
         fig.add_trace(go.Scatter(
-            x=[0, math.sin(math.radians(a)) * 0.95],
-            y=[0, math.cos(math.radians(a)) * 0.95],
-            mode="lines", line=dict(color="#0f1e36", width=1),
+            x=[r * math.sin(math.radians(t)) for t in ring_t],
+            y=[r * math.cos(math.radians(t)) for t in ring_t],
+            mode="lines", line=dict(color=c, width=w, dash=d),
             showlegend=False, hoverinfo="skip",
         ))
 
-    # Needle
+    # ── 30° tick marks around outer ring ──────────────────────────────────
+    for deg in range(0, 360, 30):
+        inner_r, outer_r = (0.92, 1.00) if deg % 90 == 0 else (0.95, 1.00)
+        sx, sy = math.sin(math.radians(deg)), math.cos(math.radians(deg))
+        tick_color = "#2a5a8a" if deg % 90 == 0 else "#1a3050"
+        fig.add_trace(go.Scatter(
+            x=[sx * inner_r, sx * outer_r], y=[sy * inner_r, sy * outer_r],
+            mode="lines", line=dict(color=tick_color, width=1.5 if deg % 90 == 0 else 0.8),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+    # ── 10° minor tick marks ──────────────────────────────────────────────
+    for deg in range(0, 360, 10):
+        if deg % 30 != 0:
+            sx, sy = math.sin(math.radians(deg)), math.cos(math.radians(deg))
+            fig.add_trace(go.Scatter(
+                x=[sx * 0.97, sx * 1.00], y=[sy * 0.97, sy * 1.00],
+                mode="lines", line=dict(color="#0f1e30", width=0.5),
+                showlegend=False, hoverinfo="skip",
+            ))
+
+    # ── Elevation fill (filled disc showing sky coverage) ─────────────────
     fig.add_trace(go.Scatter(
-        x=[0, nx * 0.85], y=[0, ny * 0.85],
+        x=[el_norm * math.sin(math.radians(t)) for t in ring_t] + [0],
+        y=[el_norm * math.cos(math.radians(t)) for t in ring_t] + [0],
+        fill="toself", fillcolor=el_fill,
+        line=dict(color=el_edge, width=1.2),
+        showlegend=False, hoverinfo="skip", mode="lines",
+    ))
+
+    # ── Crosshair lines ───────────────────────────────────────────────────
+    for a in [0, 90, 180, 270]:
+        sx, sy = math.sin(math.radians(a)), math.cos(math.radians(a))
+        fig.add_trace(go.Scatter(
+            x=[0, sx * 0.92], y=[0, sy * 0.92],
+            mode="lines", line=dict(color="#0c1828", width=0.8),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+    # ── Cardinal labels ───────────────────────────────────────────────────
+    for angle, label in [(0, "N"), (90, "E"), (180, "S"), (270, "W")]:
+        fig.add_annotation(
+            x=math.sin(math.radians(angle)) * 1.14,
+            y=math.cos(math.radians(angle)) * 1.14,
+            text=f"<b>{label}</b>", showarrow=False,
+            font=dict(color="#4a90c8", size=11, family="Share Tech Mono"),
+        )
+
+    # ── Degree labels every 30° (skip cardinals) ──────────────────────────
+    for deg in range(0, 360, 30):
+        if deg % 90 != 0:
+            fig.add_annotation(
+                x=math.sin(math.radians(deg)) * 1.12,
+                y=math.cos(math.radians(deg)) * 1.12,
+                text=f"{deg}", showarrow=False,
+                font=dict(color="#1e3a55", size=7, family="Share Tech Mono"),
+            )
+
+    # ── Azimuth sweep arc (shows the selected azimuth as a glowing arc) ──
+    arc_pts = 60
+    arc_half = 3  # ±3° glow band
+    arc_angles = [az_deg - arc_half + i * (2 * arc_half) / arc_pts for i in range(arc_pts + 1)]
+    fig.add_trace(go.Scatter(
+        x=[0.88 * math.sin(math.radians(a)) for a in arc_angles],
+        y=[0.88 * math.cos(math.radians(a)) for a in arc_angles],
+        mode="lines", line=dict(color="rgba(88,166,255,0.6)", width=4),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # ── Needle (main azimuth pointer) ─────────────────────────────────────
+    # Glow layer
+    fig.add_trace(go.Scatter(
+        x=[0, nx * 0.87], y=[0, ny * 0.87],
+        mode="lines", line=dict(color="rgba(88,166,255,0.25)", width=6),
+        showlegend=False, hoverinfo="skip",
+    ))
+    # Core needle
+    fig.add_trace(go.Scatter(
+        x=[0, nx * 0.87], y=[0, ny * 0.87],
         mode="lines", line=dict(color="#58a6ff", width=2.5),
         showlegend=False, hoverinfo="skip",
     ))
+    # Arrowhead
     fig.add_annotation(
-        ax=nx * 0.3, ay=ny * 0.3,
-        x=nx * 0.90, y=ny * 0.90,
+        ax=nx * 0.4, ay=ny * 0.4, x=nx * 0.92, y=ny * 0.92,
         axref="x", ayref="y", xref="x", yref="y",
-        arrowhead=2, arrowsize=1.2, arrowwidth=2,
+        arrowhead=2, arrowsize=1.3, arrowwidth=2.5,
         arrowcolor="#58a6ff", showarrow=True,
     )
-
-    # Tail (opposite direction, shorter, dimmer)
+    # Tail
     fig.add_trace(go.Scatter(
-        x=[0, -nx * 0.30], y=[0, -ny * 0.30],
-        mode="lines", line=dict(color="#1e3558", width=1.5),
+        x=[0, -nx * 0.25], y=[0, -ny * 0.25],
+        mode="lines", line=dict(color="#1a3050", width=1.2),
         showlegend=False, hoverinfo="skip",
     ))
 
-    # Center dot
+    # ── Sun dot at needle tip ─────────────────────────────────────────────
+    sun_r = el_norm * 0.92  # Position along needle scaled by elevation
+    fig.add_trace(go.Scatter(
+        x=[nx * sun_r], y=[ny * sun_r], mode="markers",
+        marker=dict(color="#ffb938", size=10, symbol="circle",
+                    line=dict(color="rgba(255,185,56,0.3)", width=4)),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # ── Center hub ────────────────────────────────────────────────────────
     fig.add_trace(go.Scatter(
         x=[0], y=[0], mode="markers",
-        marker=dict(color="#58a6ff", size=7, symbol="circle"),
+        marker=dict(color="#1a3050", size=10, symbol="circle",
+                    line=dict(color="#2a5a8a", width=1.5)),
+        showlegend=False, hoverinfo="skip",
+    ))
+    fig.add_trace(go.Scatter(
+        x=[0], y=[0], mode="markers",
+        marker=dict(color="#58a6ff", size=4, symbol="circle"),
         showlegend=False, hoverinfo="skip",
     ))
 
-    # AZ readout below center
+    # ── Digital readout ───────────────────────────────────────────────────
     fig.add_annotation(
-        x=0, y=-0.36, text=f"<b>{az_deg:03d}°</b>",
+        x=0, y=-0.42,
+        text=f"<b>{az_deg:03d}°</b>",
         showarrow=False,
-        font=dict(color="#79c0ff", size=15, family="Share Tech Mono"),
-        xref="x", yref="y",
+        font=dict(color="#79c0ff", size=16, family="Share Tech Mono"),
     )
 
     fig.update_layout(
-        xaxis=dict(range=[-1.3, 1.3], visible=False, scaleanchor="y"),
-        yaxis=dict(range=[-1.3, 1.3], visible=False),
+        xaxis=dict(range=[-1.28, 1.28], visible=False, scaleanchor="y"),
+        yaxis=dict(range=[-1.28, 1.28], visible=False),
         plot_bgcolor="#070b14",
         paper_bgcolor="#090e1a",
         margin=dict(l=0, r=0, t=0, b=0),
-        height=230,
+        height=250,
         showlegend=False,
+    )
+    return fig
+
+
+def make_sun_hemisphere_3d(az_deg, el_deg):
+    """3D interactive sky hemisphere with sun position, wireframe dome, and horizon plane."""
+    import numpy as np
+
+    # Sun position in 3D (spherical → cartesian)
+    az_rad = math.radians(az_deg)
+    el_rad = math.radians(el_deg)
+    sun_x = math.cos(el_rad) * math.sin(az_rad)
+    sun_y = math.cos(el_rad) * math.cos(az_rad)
+    sun_z = math.sin(el_rad)
+
+    fig = go.Figure()
+
+    # ── Wireframe hemisphere (elevation arcs) ─────────────────────────────
+    theta = np.linspace(0, 2 * np.pi, 90)
+    for el in [15, 30, 45, 60, 75]:
+        r = math.cos(math.radians(el))
+        z = math.sin(math.radians(el))
+        fig.add_trace(go.Scatter3d(
+            x=r * np.cos(theta), y=r * np.sin(theta),
+            z=np.full_like(theta, z),
+            mode="lines", line=dict(color="rgba(30,53,88,0.4)", width=1),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+    # ── Wireframe hemisphere (azimuth meridians) ──────────────────────────
+    phi = np.linspace(0, np.pi / 2, 30)
+    for az in range(0, 360, 30):
+        az_r = math.radians(az)
+        fig.add_trace(go.Scatter3d(
+            x=np.cos(phi) * math.sin(az_r),
+            y=np.cos(phi) * math.cos(az_r),
+            z=np.sin(phi),
+            mode="lines", line=dict(color="rgba(30,53,88,0.3)", width=1),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+    # ── Horizon circle ────────────────────────────────────────────────────
+    fig.add_trace(go.Scatter3d(
+        x=np.cos(theta), y=np.sin(theta), z=np.zeros_like(theta),
+        mode="lines", line=dict(color="#2a5a8a", width=2.5),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # ── Cardinal markers on horizon ───────────────────────────────────────
+    for az, label in [(0, "N"), (90, "E"), (180, "S"), (270, "W")]:
+        r_az = math.radians(az)
+        fig.add_trace(go.Scatter3d(
+            x=[1.08 * math.sin(r_az)], y=[1.08 * math.cos(r_az)], z=[0],
+            mode="text", text=[label],
+            textfont=dict(color="#4a90c8", size=12, family="Share Tech Mono"),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+    # ── Sun ray line (origin → sun) ───────────────────────────────────────
+    fig.add_trace(go.Scatter3d(
+        x=[0, sun_x], y=[0, sun_y], z=[0, sun_z],
+        mode="lines", line=dict(color="rgba(255,185,56,0.5)", width=3),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # ── Sun projection on horizon (shadow line) ───────────────────────────
+    fig.add_trace(go.Scatter3d(
+        x=[sun_x, sun_x], y=[sun_y, sun_y], z=[0, sun_z],
+        mode="lines", line=dict(color="rgba(255,185,56,0.2)", width=1, dash="dot"),
+        showlegend=False, hoverinfo="skip",
+    ))
+    # Shadow dot on horizon
+    fig.add_trace(go.Scatter3d(
+        x=[sun_x], y=[sun_y], z=[0],
+        mode="markers",
+        marker=dict(color="rgba(255,185,56,0.3)", size=5, symbol="circle"),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # ── Sun orb (main, with glow layers) ──────────────────────────────────
+    # Outer glow
+    fig.add_trace(go.Scatter3d(
+        x=[sun_x], y=[sun_y], z=[sun_z],
+        mode="markers",
+        marker=dict(color="rgba(255,200,60,0.15)", size=22, symbol="circle",
+                    line=dict(width=0)),
+        showlegend=False, hoverinfo="skip",
+    ))
+    # Mid glow
+    fig.add_trace(go.Scatter3d(
+        x=[sun_x], y=[sun_y], z=[sun_z],
+        mode="markers",
+        marker=dict(color="rgba(255,185,56,0.4)", size=14, symbol="circle",
+                    line=dict(width=0)),
+        showlegend=False, hoverinfo="skip",
+    ))
+    # Core sun
+    fig.add_trace(go.Scatter3d(
+        x=[sun_x], y=[sun_y], z=[sun_z],
+        mode="markers+text",
+        marker=dict(color="#ffb938", size=9, symbol="circle",
+                    line=dict(color="#ffd060", width=2)),
+        text=[f"☀ AZ:{az_deg}° EL:{el_deg}°"],
+        textposition="top center",
+        textfont=dict(color="#ffb938", size=10, family="Share Tech Mono"),
+        showlegend=False,
+        hovertemplate=f"Sun Position<br>Azimuth: {az_deg}°<br>Elevation: {el_deg}°<extra></extra>",
+    ))
+
+    # ── Elevation arc (from horizon to sun along its azimuth) ─────────────
+    arc_el = np.linspace(0, el_rad, 30)
+    fig.add_trace(go.Scatter3d(
+        x=np.cos(arc_el) * math.sin(az_rad),
+        y=np.cos(arc_el) * math.cos(az_rad),
+        z=np.sin(arc_el),
+        mode="lines", line=dict(color="#ffb938", width=3),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # ── Zenith point ──────────────────────────────────────────────────────
+    fig.add_trace(go.Scatter3d(
+        x=[0], y=[0], z=[1.0],
+        mode="markers+text",
+        marker=dict(color="#2a5a8a", size=3),
+        text=["ZENITH"], textposition="top center",
+        textfont=dict(color="#1e3a55", size=8, family="Share Tech Mono"),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # ── Camera angle (looking from a nice perspective) ────────────────────
+    cam_az = math.radians(az_deg + 150)
+    cam_dist = 2.2
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(visible=False, range=[-1.3, 1.3]),
+            yaxis=dict(visible=False, range=[-1.3, 1.3]),
+            zaxis=dict(visible=False, range=[-0.1, 1.3]),
+            bgcolor="#070b14",
+            aspectmode="cube",
+            camera=dict(
+                eye=dict(
+                    x=cam_dist * math.sin(cam_az) * 0.7,
+                    y=cam_dist * math.cos(cam_az) * 0.7,
+                    z=0.9,
+                ),
+                up=dict(x=0, y=0, z=1),
+            ),
+        ),
+        paper_bgcolor="#0a1020",
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=520,
+        showlegend=False,
+        title=dict(
+            text=f"SKY HEMISPHERE — SUN @ AZ {az_deg:03d}° EL {el_deg:02d}°",
+            font=dict(color="#5b7ba8", size=11, family="Share Tech Mono"),
+        ),
     )
     return fig
 
@@ -407,7 +615,7 @@ with st.sidebar:
     probe_el = st.slider("Elevation (°)", 2, 85, 40, step=1)
 
     compass_fig = make_polar_compass(probe_az, probe_el)
-    st.plotly_chart(compass_fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(compass_fig, use_container_width=True, config={"displayModeBar": False}, key="sidebar_compass")
 
     st.markdown(
         f"<div style='font-family:Share Tech Mono,monospace;font-size:0.72rem;"
@@ -430,13 +638,63 @@ with st.sidebar:
 #  TABS
 # ══════════════════════════════════════════════════════════════════════════════
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "  ☀ SUN POSITION  ",
     "  HEATMAPS  ",
     "  ALL MATCHERS  ",
     "  TRUST ROUTER  ",
     "  3-D SURFACE  ",
     "  RAW DATA  ",
 ])
+
+# ─── Tab 0: Interactive 3D Sun Position Hemisphere ────────────────────────────
+with tab0:
+    st.caption(
+        "Interactive 3-D sky hemisphere showing the sun's position based on your sidebar "
+        "azimuth and elevation inputs. Drag to rotate, scroll to zoom. "
+        "The golden arc traces the sun's elevation from the horizon. "
+        "Dashed line shows the shadow projection on the horizon plane."
+    )
+
+    hemi_left, hemi_right = st.columns([3, 1])
+
+    with hemi_left:
+        fig_hemi = make_sun_hemisphere_3d(probe_az, probe_el)
+        st.plotly_chart(fig_hemi, use_container_width=True, key="sun_hemisphere")
+
+    with hemi_right:
+        # Sun angle telemetry panel
+        st.markdown(
+            f"<div style='background:#0d1525;border:1px solid #1e2e4a;"
+            f"border-left:3px solid #ffb938;border-radius:4px;padding:16px;margin-top:20px;'>"
+            f"<div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;"
+            f"color:#5b7ba8;letter-spacing:0.1em;margin-bottom:12px;'>◈ SUN TELEMETRY</div>"
+            f"<div style='font-family:Share Tech Mono,monospace;margin-bottom:10px;'>"
+            f"<div style='font-size:0.68rem;color:#5b7ba8;'>AZIMUTH</div>"
+            f"<div style='font-size:1.8rem;color:#ffb938;font-weight:700;'>{probe_az:03d}°</div></div>"
+            f"<div style='font-family:Share Tech Mono,monospace;margin-bottom:10px;'>"
+            f"<div style='font-size:0.68rem;color:#5b7ba8;'>ELEVATION</div>"
+            f"<div style='font-size:1.8rem;color:#ffb938;font-weight:700;'>{probe_el:02d}°</div></div>"
+            f"<div style='font-family:Share Tech Mono,monospace;margin-bottom:10px;'>"
+            f"<div style='font-size:0.68rem;color:#5b7ba8;'>SUN HEIGHT</div>"
+            f"<div style='font-size:1.1rem;color:#{'39d353' if probe_el > 20 else 'e3b341' if probe_el > 8 else 'ff4b4b'};'>"
+            f"{'HIGH ▲' if probe_el > 45 else 'MEDIUM ■' if probe_el > 15 else 'GRAZING ▼'}</div></div>"
+            f"<div style='font-family:Share Tech Mono,monospace;'>"
+            f"<div style='font-size:0.68rem;color:#5b7ba8;'>SHADOW RISK</div>"
+            f"<div style='font-size:1.1rem;color:#{'39d353' if probe_el > 30 else 'e3b341' if probe_el > 10 else 'ff4b4b'};'>"
+            f"{'LOW' if probe_el > 30 else 'MODERATE' if probe_el > 10 else 'CRITICAL'}</div></div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Compact compass below telemetry
+        st.markdown(
+            "<div style='font-family:Share Tech Mono,monospace;font-size:0.68rem;"
+            "color:#2a6496;text-align:center;margin-top:12px;letter-spacing:0.08em;'>◈ BEARING</div>",
+            unsafe_allow_html=True,
+        )
+        small_compass = make_polar_compass(probe_az, probe_el)
+        st.plotly_chart(small_compass, use_container_width=True, config={"displayModeBar": False}, key="tab_compass")
 
 # ─── Tab 1: Single-matcher heatmaps ──────────────────────────────────────────
 with tab1:
@@ -479,7 +737,7 @@ with tab1:
             font_color="#c8d8e8", height=380,
             margin=dict(l=60, r=20, t=50, b=60),
         )
-        st.plotly_chart(fig_s, use_container_width=True)
+        st.plotly_chart(fig_s, use_container_width=True, key="heatmap_success")
 
         azs2, els2, z_corr = pivot_correct(rows, sel_matcher, sel_protocol, sel_factor)
         text_corr = [[str(v) if v is not None else "–" for v in row_z] for row_z in z_corr]
@@ -507,7 +765,7 @@ with tab1:
             font_color="#c8d8e8", height=380,
             margin=dict(l=60, r=20, t=50, b=60),
         )
-        st.plotly_chart(fig_c, use_container_width=True)
+        st.plotly_chart(fig_c, use_container_width=True, key="heatmap_correct")
 
 
 # ─── Tab 2: All-matchers comparison ──────────────────────────────────────────
@@ -556,7 +814,7 @@ with tab2:
         font_color="#c8d8e8", height=360, showlegend=False, bargap=0.3,
         margin=dict(l=60, r=20, t=50, b=60),
     )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_bar, use_container_width=True, key="bar_matchers")
 
     st.markdown(
         "<div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;"
@@ -619,7 +877,7 @@ with tab2:
         height=420,
         margin=dict(l=60, r=20, t=20, b=60),
     )
-    st.plotly_chart(fig_el, use_container_width=True)
+    st.plotly_chart(fig_el, use_container_width=True, key="elevation_lines")
 
 
 # ─── Tab 3: Router probe ──────────────────────────────────────────────────────
@@ -646,7 +904,7 @@ with tab3:
             unsafe_allow_html=True,
         )
         router_compass = make_polar_compass(probe_az, probe_el)
-        st.plotly_chart(router_compass, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(router_compass, use_container_width=True, config={"displayModeBar": False}, key="router_compass")
 
     with right_col:
         router_rows = []
@@ -815,7 +1073,7 @@ with tab4:
                 font=dict(color="#5b7ba8", size=11, family="Share Tech Mono"),
             ),
         )
-        st.plotly_chart(fig_3d, use_container_width=True)
+        st.plotly_chart(fig_3d, use_container_width=True, key="surface_3d")
 
 
 # ─── Tab 5: Raw data ──────────────────────────────────────────────────────────
