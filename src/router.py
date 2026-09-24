@@ -132,10 +132,64 @@ def get_best_matcher(az, el, atlas=None):
     return "sift", "raw", "RED", 0.0
 
 
-# ── Negative control ──────────────────────────────────────────────────────────
+# ── Negative control & Ground-Truth-Free Rejection Signal ────────────────────────
 
-def negative_control_check(pts1, pts2, reproj_thresh=3.0, min_inliers=15):
-    """Validate a match set via RANSAC.
+def verify_transform_plausibility(M_est, pts1_inliers, img_shape=(512, 512),
+                                  min_scale=0.80, max_scale=1.25, max_anisotropy=1.20,
+                                  min_area_coverage=0.10):
+    """Ground-truth-free physical plausibility filter for same-GSD lunar terrain matching.
+
+    Autonomous rejection criteria:
+      1. Scale Bounds (SVD Singular Values): Same-GSD orbital imagery has near-unity magnification.
+         s1, s2 must be within [min_scale, max_scale].
+      2. Shear / Anisotropy: s1 / s2 must be <= max_anisotropy. Rigid lunar surface under near-nadir
+         sensors does not undergo large differential stretching.
+      3. Spatial Dispersion: Inliers cannot be tightly clustered on a single rim arc or line.
+         Bounding box of inliers must cover >= min_area_coverage of image area.
+
+    Returns (is_plausible, reason_str)
+    """
+    if M_est is None:
+        return False, "Transform is None"
+
+    A = M_est[:2, :2]
+    # SVD: A = U @ diag(s) @ Vt
+    try:
+        _, s, _ = np.linalg.svd(A)
+        s1, s2 = float(s[0]), float(s[1])
+    except Exception as e:
+        return False, f"SVD decomposition failed: {e}"
+
+    if s2 <= 1e-6:
+        return False, f"Degenerate singular transform (scales: {s1:.2f}, {s2:.2f})"
+
+    # 1. Scale bounds
+    if s1 > max_scale or s2 < min_scale:
+        return False, f"Implausible physical scale (s1={s1:.3f}, s2={s2:.3f} outside [{min_scale}, {max_scale}])"
+
+    # 2. Shear / aspect ratio
+    anisotropy = s1 / s2
+    if anisotropy > max_anisotropy:
+        return False, f"Implausible shear/anisotropy (s1/s2={anisotropy:.3f} > {max_anisotropy})"
+
+    # 3. Spatial dispersion check
+    if pts1_inliers is not None and len(pts1_inliers) >= 4:
+        min_xy = np.min(pts1_inliers, axis=0)
+        max_xy = np.max(pts1_inliers, axis=0)
+        bbox_area = float((max_xy[0] - min_xy[0]) * (max_xy[1] - min_xy[1]))
+        total_area = float(img_shape[0] * img_shape[1])
+        coverage = bbox_area / total_area if total_area > 0 else 0.0
+        if coverage < min_area_coverage:
+            return False, f"Inliers spatially clustered (coverage {coverage:.1%} < {min_area_coverage:.1%})"
+
+    return True, f"Physically plausible (s1={s1:.2f}, s2={s2:.2f}, shear={anisotropy:.2f})"
+
+
+def negative_control_check(pts1, pts2, reproj_thresh=3.0, min_inliers=15, img_shape=(512, 512)):
+    """Validate a match set via RANSAC + ground-truth-free physical plausibility.
+
+    Catches both low-inlier cases (SIFT negative control) and coincidental
+    crater-rim alignments with degenerate warps (MINIMA negative control).
 
     Returns (is_valid, M_est, reason_str)
     """
@@ -151,15 +205,24 @@ def negative_control_check(pts1, pts2, reproj_thresh=3.0, min_inliers=15):
     if M_est is None:
         return False, None, "RANSAC failed to find a valid transform"
 
-    inlier_count = int(np.sum(inliers)) if inliers is not None else 0
+    inlier_mask = inliers.ravel() == 1 if inliers is not None else np.zeros(len(pts1), dtype=bool)
+    inlier_count = int(np.sum(inlier_mask))
     if inlier_count < min_inliers:
         return False, M_est, f"Too few inliers ({inlier_count} < {min_inliers})"
 
     det = M_est[0, 0] * M_est[1, 1] - M_est[0, 1] * M_est[1, 0]
     if abs(det) < 0.1 or abs(det) > 10.0:
-        return False, M_est, f"Degenerate transform (det={det:.3f})"
+        return False, M_est, f"Degenerate transform determinant (det={det:.3f})"
 
-    return True, M_est, f"Success ({inlier_count} inliers, det={det:.3f})"
+    # Ground-truth-free physical plausibility check
+    pts1_inliers = pts1[inlier_mask]
+    is_plausible, plausibility_reason = verify_transform_plausibility(
+        M_est, pts1_inliers, img_shape=img_shape
+    )
+    if not is_plausible:
+        return False, M_est, f"Rejected by physical plausibility: {plausibility_reason}"
+
+    return True, M_est, f"Success ({inlier_count} inliers, det={det:.3f}, {plausibility_reason})"
 
 
 # ── Low-level matcher runner ──────────────────────────────────────────────────

@@ -1,9 +1,9 @@
 import zipfile, os, shutil
 import cv2
 
-PPTX_SRC = r"c:\Users\akoli\OneDrive\Desktop\SIH26166_SunSweepAtlas_FINAL.pptx"
-PPTX_BAK = r"c:\Users\akoli\OneDrive\Desktop\SIH26166_SunSweepAtlas_FINAL_backup.pptx"
-PPTX_TMP = r"c:\Users\akoli\OneDrive\Desktop\SIH26166_SunSweepAtlas_FINAL_tmp.pptx"
+PPTX_SRC = r"SIH26166_SunSweepAtlas_FINAL.pptx"
+PPTX_BAK = r"SIH26166_SunSweepAtlas_FINAL_backup.pptx"
+PPTX_TMP = r"SIH26166_SunSweepAtlas_FINAL_tmp.pptx"
 
 # 1. Create backup if it doesn't already exist
 if not os.path.exists(PPTX_BAK):

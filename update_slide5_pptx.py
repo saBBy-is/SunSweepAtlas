@@ -1,8 +1,8 @@
 import zipfile, os, shutil
 
-PPTX_SRC = r"c:\Users\akoli\OneDrive\Desktop\SIH26166_SunSweepAtlas_FINAL.pptx"
-PPTX_BAK = r"c:\Users\akoli\OneDrive\Desktop\SIH26166_SunSweepAtlas_FINAL_backup_slide5.pptx"
-PPTX_TMP = r"c:\Users\akoli\OneDrive\Desktop\SIH26166_SunSweepAtlas_FINAL_tmp.pptx"
+PPTX_SRC = r"SIH26166_SunSweepAtlas_FINAL.pptx"
+PPTX_BAK = r"SIH26166_SunSweepAtlas_FINAL_backup_slide5.pptx"
+PPTX_TMP = r"SIH26166_SunSweepAtlas_FINAL_tmp.pptx"
 
 # Backup
 shutil.copy2(PPTX_SRC, PPTX_BAK)
@@ -12,7 +12,7 @@ old_stat = "44%"
 new_stat = "21%"
 
 old_subtext = "Of our render in cast shadow at 5° Sun elevation, rising to 60% at 3°"
-new_subtext = "Of our render in cast shadow at 10° Sun elevation, up from 2.5% at 40°"
+new_subtext = "Of our render in cast shadow at 10° Sun elevation, up from 2.9% at 40°"
 
 with zipfile.ZipFile(PPTX_SRC, 'r') as zin, zipfile.ZipFile(PPTX_TMP, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
     for item in zin.infolist():

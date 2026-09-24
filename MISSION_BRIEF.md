@@ -4,7 +4,7 @@
 ## THE WINNING DIFFERENTIATOR: "Sun-Sweep Atlas & Trust Router"
 Most teams will try a generic AI matcher. We will be unique by:
 1. **Shading Simulation:** Using LOLA DEM (Digital Elevation Models) to render synthetic lunar terrain under varying sun angles.
-2. **Matcher Benchmarking:** Running a "Sweep" of 5+ state-of-the-art matchers (LightGlue, RoMa, LoFTR, XoFTR, SIFT) against these synthetic images to see which ones break at what sun angles.
+2. **Matcher Benchmarking:** Running a "Sweep" of 6 state-of-the-art matchers (SIFT, ORB, LoFTR, SuperPoint-LightGlue, ALIKED-LightGlue, MINIMA) against these synthetic images to see which ones break at what sun angles.
 3. **The Router:** Creating a logic that reads sun-angle metadata from the ISRO image and automatically picks the "best" matcher for that specific lighting condition.
 4. **Reliability:** Implementing a "Red/Amber/Green" trust light. If the sun angle is too extreme, the system refuses to provide a false match.
 

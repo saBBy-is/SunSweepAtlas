@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Project-specific scratch data
+data/scratch/
+demo_fallback/
+
+# Model weight caches (should never be committed)
+*.ckpt
+*.pth
+
+# VSCode / IDE
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Test scripts (session-specific diagnostics)
+test_plausibility_*.py
+
+# Session debris / extracted files
+res.txt
+slide2.xml
+slide5.xml
+diagnostic_terminal.txt
+requirements.txt.bak
+git_commit.py
+git_ops.py
+
+# PPTX backups and temp files
+*_backup*.pptx
+*_tmp.pptx
+
+# Presentation files (too large for git)
+*.pptx
+*.pdf

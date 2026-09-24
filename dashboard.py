@@ -2,8 +2,9 @@
 dashboard.py — LunarAlign Matcher Atlas Dashboard (SIH 2026)
 ═════════════════════════════════════════════════════════════
 Visualises the Sun-Sweep Atlas (results/atlas.csv) with:
+  • Graphical polar-compass azimuth selector
   • Per-matcher success-rate heatmaps (az × el)
-  • Correct-match count heatmaps
+  • 3-D success-rate surface
   • Trust-light summary for every matcher
   • Router recommendation for any user-specified sun angle
   • Raw-data table
@@ -26,41 +27,95 @@ sys.path.insert(0, os.path.join(_here, "src"))
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="LunarAlign — Matcher Atlas",
+    page_title="LunarAlign — Sun-Sweep Matcher Atlas",
     page_icon="🌕",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ────────────────────────────────────────────────────────────────
+# ── Custom CSS — NASA/ISRO Mission-Control aesthetic ──────────────────────────
 st.markdown("""
 <style>
-    /* Dark background for the whole app */
-    .stApp { background: #0d1117; color: #e6edf3; }
-    .block-container { padding-top: 1.5rem; }
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@300;400;600;700&display=swap');
 
-    /* Sidebar */
-    [data-testid="stSidebar"] { background: #161b22; border-right: 1px solid #21262d; }
-    [data-testid="stSidebar"] * { color: #e6edf3 !important; }
+  html, body, .stApp { background: #070b14; color: #c8d8e8; font-family: 'Inter', sans-serif; }
+  .block-container { padding: 1.2rem 2rem 2rem; max-width: 1600px; }
 
-    /* Metric cards */
-    [data-testid="stMetric"] { background: #161b22; border: 1px solid #21262d;
-                                border-radius: 8px; padding: 12px; }
-    [data-testid="stMetricLabel"] { color: #8b949e !important; font-size: 0.8rem; }
-    [data-testid="stMetricValue"] { color: #e6edf3 !important; font-size: 1.6rem; font-weight: 700; }
-    [data-testid="stMetricDelta"] { font-size: 0.8rem; }
+  [data-testid="stSidebar"] { background: #090e1a; border-right: 1px solid #1a2540; }
+  [data-testid="stSidebar"] * { color: #c8d8e8 !important; }
+  [data-testid="stSidebar"] .stSelectbox label,
+  [data-testid="stSidebar"] .stSlider label {
+    font-size: 0.78rem; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #5b7ba8 !important;
+  }
 
-    /* Trust badges */
-    .trust-green { color:#2ea043; font-weight:700; font-size:1.1rem; }
-    .trust-amber { color:#d29922; font-weight:700; font-size:1.1rem; }
-    .trust-red   { color:#f85149; font-weight:700; font-size:1.1rem; }
+  [data-testid="stMetric"] {
+    background: linear-gradient(135deg, #0d1525 0%, #111d30 100%);
+    border: 1px solid #1e2e4a; border-top: 2px solid #2a6496;
+    border-radius: 4px; padding: 14px 18px;
+  }
+  [data-testid="stMetricLabel"] {
+    color: #5b7ba8 !important; font-size: 0.72rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  [data-testid="stMetricValue"] {
+    color: #e8f4ff !important; font-size: 1.7rem;
+    font-weight: 700; font-family: 'Share Tech Mono', monospace;
+  }
+  [data-testid="stMetricDelta"] { font-size: 0.78rem; }
 
-    /* Headers */
-    h1 { color: #e6edf3 !important; }
-    h2, h3 { color: #c9d1d9 !important; }
+  .stTabs [data-baseweb="tab-list"] { gap: 0; border-bottom: 1px solid #1a2540; background: transparent; }
+  .stTabs [data-baseweb="tab"] {
+    background: transparent; color: #5b7ba8;
+    border: none; border-bottom: 2px solid transparent;
+    padding: 10px 20px; font-size: 0.82rem;
+    letter-spacing: 0.05em; font-weight: 600;
+  }
+  .stTabs [aria-selected="true"] {
+    background: transparent; color: #79c0ff !important;
+    border-bottom: 2px solid #2a6496 !important;
+  }
 
-    /* Divider */
-    hr { border-color: #21262d; }
+  .trust-green { color: #39d353; font-weight: 700; font-family: 'Share Tech Mono', monospace; }
+  .trust-amber { color: #e3b341; font-weight: 700; font-family: 'Share Tech Mono', monospace; }
+  .trust-red   { color: #ff4b4b; font-weight: 700; font-family: 'Share Tech Mono', monospace; }
+
+  h1 { color: #e8f4ff !important; font-weight: 700; letter-spacing: -0.02em; }
+  h2, h3 { color: #9ab8d4 !important; font-weight: 600; }
+  hr { border-color: #1a2540; margin: 1rem 0; }
+
+  .mission-header {
+    background: linear-gradient(90deg, #0a1628 0%, #0d1f3c 50%, #0a1628 100%);
+    border: 1px solid #1a2e50; border-radius: 4px;
+    padding: 16px 24px; margin-bottom: 1.2rem;
+    display: flex; align-items: center; gap: 20px;
+  }
+  .mission-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.4rem; color: #79c0ff; letter-spacing: 0.08em;
+  }
+  .mission-sub { font-size: 0.78rem; color: #5b7ba8; letter-spacing: 0.05em; }
+
+  .status-dot-green { display:inline-block; width:9px; height:9px; border-radius:50%; background:#39d353; box-shadow:0 0 6px #39d353; margin-right:6px; }
+  .status-dot-amber { display:inline-block; width:9px; height:9px; border-radius:50%; background:#e3b341; box-shadow:0 0 6px #e3b341; margin-right:6px; }
+  .status-dot-red   { display:inline-block; width:9px; height:9px; border-radius:50%; background:#ff4b4b; box-shadow:0 0 6px #ff4b4b; margin-right:6px; }
+
+  .router-box {
+    background: #0d1a30; border: 1px solid #1e3558;
+    border-left: 3px solid #2a6496; border-radius: 4px;
+    padding: 16px 20px; margin: 10px 0;
+    font-family: 'Share Tech Mono', monospace; font-size: 0.92rem;
+  }
+  .router-box-red {
+    background: #170a0a; border: 1px solid #3d1515;
+    border-left: 3px solid #ff4b4b; border-radius: 4px;
+    padding: 16px 20px; margin: 10px 0;
+    font-family: 'Share Tech Mono', monospace;
+  }
+  .compass-label {
+    font-family: 'Share Tech Mono', monospace; font-size: 0.72rem;
+    color: #5b7ba8; text-align: center; letter-spacing: 0.1em; margin-bottom: 4px;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -72,9 +127,18 @@ ATLAS_PATH = os.path.join(_here, "results", "atlas.csv")
 
 _GREEN_THRESH = 0.85
 _AMBER_THRESH = 0.40
-_AZ_GRID = [0, 45, 90, 135, 180, 225, 270, 315]
-_EL_GRID = [3, 5, 10, 20, 30, 45, 60, 80]
+_AZ_GRID  = [0, 45, 90, 135, 180, 225, 270, 315]
+_EL_GRID  = [3, 5, 10, 20, 30, 45, 60, 80]
 _MATCHER_CASCADE = ["minima", "superpoint-lightglue", "loftr", "sift", "orb", "aliked-lightglue"]
+
+_COLOR_MAP = {
+    "minima":               "#58a6ff",
+    "superpoint-lightglue": "#3fb950",
+    "loftr":                "#bc8cff",
+    "sift":                 "#f0883e",
+    "orb":                  "#ff4b4b",
+    "aliked-lightglue":     "#79c0ff",
+}
 
 
 @st.cache_data(show_spinner="Loading atlas…")
@@ -85,8 +149,8 @@ def load_atlas_raw():
     rows = []
     with open(ATLAS_PATH, newline="") as f:
         for row in csv.DictReader(f):
-            row["az"] = int(row["az"])
-            row["el"] = int(row["el"])
+            row["az"]      = int(row.get("az", row.get("abs_az", 0)))
+            row["el"]      = int(row["el"])
             row["matches"] = int(row["matches"])
             row["correct"] = int(row["correct"])
             row["success"] = row["success"] == "True"
@@ -101,10 +165,10 @@ def load_atlas_raw():
 
 def _trust(rate):
     if rate >= _GREEN_THRESH:
-        return "GREEN", "🟢"
+        return "GREEN", "●"
     if rate >= _AMBER_THRESH:
-        return "AMBER", "🟡"
-    return "RED", "🔴"
+        return "AMBER", "●"
+    return "RED", "●"
 
 
 def _snap(value, grid):
@@ -114,7 +178,6 @@ def _snap(value, grid):
 # ── Aggregate helpers ─────────────────────────────────────────────────────────
 
 def pivot_success(rows, matcher, protocol, factor):
-    """Return (az_list, el_list, z 2-D list [el][az]) for success-rate heatmap."""
     acc = defaultdict(lambda: [0, 0])
     for r in rows:
         if r["matcher"] == matcher and r["protocol"] == protocol and r["factor"] == factor:
@@ -134,7 +197,6 @@ def pivot_success(rows, matcher, protocol, factor):
 
 
 def pivot_correct(rows, matcher, protocol, factor):
-    """Return (az_list, el_list, z) for mean-correct-matches heatmap."""
     acc = defaultdict(list)
     for r in rows:
         if r["matcher"] == matcher and r["protocol"] == protocol and r["factor"] == factor:
@@ -152,7 +214,6 @@ def pivot_correct(rows, matcher, protocol, factor):
 
 
 def build_atlas_rates(rows):
-    """Build { matcher -> { (az, el) -> rate } } for the router panel."""
     acc = defaultdict(lambda: defaultdict(lambda: [0, 0]))
     for r in rows:
         m = r["matcher"]
@@ -163,117 +224,300 @@ def build_atlas_rates(rows):
             for m, cells in acc.items()}
 
 
+def make_polar_compass(az_deg, el_deg):
+    """Render a mission-control style compass showing azimuth needle and elevation fill."""
+    theta_rad = math.radians(az_deg)
+    nx = math.sin(theta_rad)
+    ny = math.cos(theta_rad)
+
+    el_norm = 1.0 - el_deg / 90.0
+    el_r = max(0, 255 - int(el_deg * 2))
+    el_g = min(255, 60 + int(el_deg * 2.4))
+    el_fill_color = f"rgba({el_r},{el_g},180,0.18)"
+
+    fig = go.Figure()
+
+    # Outer ring
+    ring_t = list(range(0, 361))
+    fig.add_trace(go.Scatter(
+        x=[math.sin(math.radians(t)) for t in ring_t],
+        y=[math.cos(math.radians(t)) for t in ring_t],
+        mode="lines", line=dict(color="#1e3558", width=1.5),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # Middle ring
+    fig.add_trace(go.Scatter(
+        x=[0.6 * math.sin(math.radians(t)) for t in ring_t],
+        y=[0.6 * math.cos(math.radians(t)) for t in ring_t],
+        mode="lines", line=dict(color="#111d30", width=1, dash="dot"),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # Elevation fill arc
+    el_r_pts = [el_norm] * 361 + [0]
+    fig.add_trace(go.Scatter(
+        x=[el_norm * math.sin(math.radians(t)) for t in range(0, 361)] + [0],
+        y=[el_norm * math.cos(math.radians(t)) for t in range(0, 361)] + [0],
+        fill="toself", fillcolor=el_fill_color,
+        line=dict(color="rgba(42,100,150,0.4)", width=1),
+        showlegend=False, hoverinfo="skip", mode="lines",
+    ))
+
+    # Cardinal labels
+    for angle, label in [(0, "N"), (90, "E"), (180, "S"), (270, "W")]:
+        r_label = 1.18
+        fig.add_annotation(
+            x=math.sin(math.radians(angle)) * r_label,
+            y=math.cos(math.radians(angle)) * r_label,
+            text=f"<b>{label}</b>", showarrow=False,
+            font=dict(color="#5b7ba8", size=10, family="Share Tech Mono"),
+            xref="x", yref="y",
+        )
+
+    # 45° tick labels
+    for angle in [45, 135, 225, 315]:
+        fig.add_annotation(
+            x=math.sin(math.radians(angle)) * 1.10,
+            y=math.cos(math.radians(angle)) * 1.10,
+            text=f"{angle}°", showarrow=False,
+            font=dict(color="#2a4060", size=7, family="Share Tech Mono"),
+            xref="x", yref="y",
+        )
+
+    # Crosshairs
+    for a in [0, 90, 180, 270]:
+        fig.add_trace(go.Scatter(
+            x=[0, math.sin(math.radians(a)) * 0.95],
+            y=[0, math.cos(math.radians(a)) * 0.95],
+            mode="lines", line=dict(color="#0f1e36", width=1),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+    # Needle
+    fig.add_trace(go.Scatter(
+        x=[0, nx * 0.85], y=[0, ny * 0.85],
+        mode="lines", line=dict(color="#58a6ff", width=2.5),
+        showlegend=False, hoverinfo="skip",
+    ))
+    fig.add_annotation(
+        ax=nx * 0.3, ay=ny * 0.3,
+        x=nx * 0.90, y=ny * 0.90,
+        axref="x", ayref="y", xref="x", yref="y",
+        arrowhead=2, arrowsize=1.2, arrowwidth=2,
+        arrowcolor="#58a6ff", showarrow=True,
+    )
+
+    # Tail (opposite direction, shorter, dimmer)
+    fig.add_trace(go.Scatter(
+        x=[0, -nx * 0.30], y=[0, -ny * 0.30],
+        mode="lines", line=dict(color="#1e3558", width=1.5),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # Center dot
+    fig.add_trace(go.Scatter(
+        x=[0], y=[0], mode="markers",
+        marker=dict(color="#58a6ff", size=7, symbol="circle"),
+        showlegend=False, hoverinfo="skip",
+    ))
+
+    # AZ readout below center
+    fig.add_annotation(
+        x=0, y=-0.36, text=f"<b>{az_deg:03d}°</b>",
+        showarrow=False,
+        font=dict(color="#79c0ff", size=15, family="Share Tech Mono"),
+        xref="x", yref="y",
+    )
+
+    fig.update_layout(
+        xaxis=dict(range=[-1.3, 1.3], visible=False, scaleanchor="y"),
+        yaxis=dict(range=[-1.3, 1.3], visible=False),
+        plot_bgcolor="#070b14",
+        paper_bgcolor="#090e1a",
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=230,
+        showlegend=False,
+    )
+    return fig
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 
 rows = load_atlas_raw()
 
-# ── Header ────────────────────────────────────────────────────────────────────
-st.markdown("# 🌕 LunarAlign — Sun-Sweep Matcher Atlas")
-st.markdown(
-    "Evaluating **6 image-matching algorithms** across a 8×8 sun-angle grid "
-    "rendered on synthetic lunar terrain — the winning differentiator for SIH 2026."
-)
+# ── Mission header ────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="mission-header">
+  <div>
+    <div class="mission-title">🌕 LUNARIGN &nbsp;/&nbsp; SUN-SWEEP MATCHER ATLAS</div>
+    <div class="mission-sub">SIH 2026 · PS 26166 · ISRO-OHRC/TMC/IIRS · TEAM: SELENOGRAPHERS</div>
+  </div>
+  <div style="margin-left:auto;text-align:right;">
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#5b7ba8;letter-spacing:0.08em;">SYSTEM STATUS</div>
+    <div><span class="status-dot-green"></span><span style="font-family:'Share Tech Mono',monospace;font-size:0.8rem;color:#39d353;">ATLAS ONLINE</span></div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 if rows is None:
-    st.error("❌  `results/atlas.csv` not found. Run `python -m src.step3_sweep` to generate it.")
+    st.error("❌  `results/atlas.csv` not found. Run `python run_honest_sweep.py` to generate it.")
     st.stop()
 
 # ── Global stats ──────────────────────────────────────────────────────────────
-all_matchers = sorted({r["matcher"] for r in rows})
+all_matchers  = sorted({r["matcher"]  for r in rows})
 all_protocols = sorted({r["protocol"] for r in rows})
 all_factors   = sorted({r["factor"]   for r in rows})
 
-total_cells = len(rows)
+total_cells   = len(rows)
 total_success = sum(1 for r in rows if r["success"])
+avg_runtime   = sum(r["runtime"] for r in rows) / total_cells if total_cells else 0
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total cells evaluated", f"{total_cells:,}")
-col2.metric("Overall success rate", f"{total_success/total_cells:.1%}")
-col3.metric("Matchers tested", str(len(all_matchers)))
-col4.metric("Sun-angle grid", f"{len(_AZ_GRID)} az × {len(_EL_GRID)} el")
+col1, col2, col3, col4, col5 = st.columns(5)
+col1.metric("CELLS EVALUATED",    f"{total_cells:,}")
+col2.metric("OVERALL SUCCESS",    f"{total_success / total_cells:.1%}")
+col3.metric("MATCHERS TESTED",    str(len(all_matchers)))
+col4.metric("GEOMETRY PAIRS",     "5 Δaz × 2 el = 10")
+col5.metric("AVG RUNTIME / CELL", f"{avg_runtime:.1f}s")
 
 st.divider()
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### 🔧 Filters")
+    st.markdown(
+        "<div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;"
+        "letter-spacing:0.1em;color:#2a6496;padding-bottom:6px;'>◈ FILTER PANEL</div>",
+        unsafe_allow_html=True,
+    )
     sel_matcher  = st.selectbox("Matcher",  all_matchers,  index=all_matchers.index("minima") if "minima" in all_matchers else 0)
     sel_protocol = st.selectbox("Protocol", all_protocols, index=0)
     sel_factor   = st.selectbox("Factor",   all_factors,   index=0)
 
     st.divider()
-    st.markdown("### 🌞 Router Probe")
-    probe_az = st.slider("Query azimuth (°)",   0, 359, 270, step=1)
-    probe_el = st.slider("Query elevation (°)",  2,  85,  40, step=1)
+
+    st.markdown(
+        "<div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;"
+        "letter-spacing:0.1em;color:#2a6496;padding-bottom:6px;'>◈ SUN ANGLE QUERY</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("<div class='compass-label'>AZIMUTH SELECTOR</div>", unsafe_allow_html=True)
+    probe_az = st.slider("Azimuth (°)", 0, 359, 270, step=1, label_visibility="collapsed")
+    probe_el = st.slider("Elevation (°)", 2, 85, 40, step=1)
+
+    compass_fig = make_polar_compass(probe_az, probe_el)
+    st.plotly_chart(compass_fig, use_container_width=True, config={"displayModeBar": False})
+
+    st.markdown(
+        f"<div style='font-family:Share Tech Mono,monospace;font-size:0.72rem;"
+        f"color:#5b7ba8;margin-top:-8px;text-align:center;'>"
+        f"EL &nbsp;<b style='color:#79c0ff;font-size:1rem;'>{probe_el:02d}°</b>"
+        f"&nbsp;&nbsp;AZ &nbsp;<b style='color:#79c0ff;font-size:1rem;'>{probe_az:03d}°</b>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
+    st.markdown(
+        "<div style='font-family:Share Tech Mono,monospace;font-size:0.65rem;"
+        "color:#1e3558;text-align:center;'>LUNARIGN v1.0 · SIH2026<br>OFFLINE · CPU-ONLY</div>",
+        unsafe_allow_html=True,
+    )
+
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  HEATMAPS
+#  TABS
 # ══════════════════════════════════════════════════════════════════════════════
 
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Heatmaps", "🌡️ All Matchers", "🤖 Router", "📋 Raw Data"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "  HEATMAPS  ",
+    "  ALL MATCHERS  ",
+    "  TRUST ROUTER  ",
+    "  3-D SURFACE  ",
+    "  RAW DATA  ",
+])
 
 # ─── Tab 1: Single-matcher heatmaps ──────────────────────────────────────────
 with tab1:
-    st.subheader(f"Success Rate (%)  —  {sel_matcher.upper()}  |  {sel_protocol}  |  {sel_factor}")
+    st.caption(
+        "Each cell shows whether the selected matcher produced a correct alignment "
+        "(≥20 inliers, ≤3 px grid error) at that sun azimuth and elevation. "
+        "Green = reliable, Red = fails or refuses."
+    )
 
     azs, els, z_succ = pivot_success(rows, sel_matcher, sel_protocol, sel_factor)
+
     if not azs:
         st.warning("No data for this combination of filters.")
     else:
-        # Text annotations: rate + ✓/✗
-        text_succ = []
-        for row_z in z_succ:
-            text_succ.append([f"{v:.0f}%" if v is not None else "–" for v in row_z])
+        text_succ = [[f"{v:.0f}%" if v is not None else "–" for v in row_z] for row_z in z_succ]
 
         fig_s = go.Figure(go.Heatmap(
-            x=[str(a) for a in azs],
-            y=[str(e) for e in els],
+            x=[f"{a}°" for a in azs],
+            y=[f"{e}°" for e in els],
             z=z_succ,
             text=text_succ,
             texttemplate="%{text}",
-            colorscale="RdYlGn",
+            colorscale=[[0, "#1a0505"], [0.4, "#5a1a0a"], [0.85, "#1a4a20"], [1.0, "#39d353"]],
             zmin=0, zmax=100,
-            colorbar=dict(title="Success %", ticksuffix="%"),
+            colorbar=dict(
+                title=dict(text="SUCCESS %", font=dict(color="#5b7ba8", size=10, family="Share Tech Mono")),
+                ticksuffix="%",
+                tickfont=dict(color="#5b7ba8", family="Share Tech Mono", size=9),
+                thickness=12, len=0.8,
+            ),
         ))
         fig_s.update_layout(
-            xaxis_title="Sun Azimuth (°)",
-            yaxis_title="Sun Elevation (°)",
-            plot_bgcolor="#0d1117",
-            paper_bgcolor="#0d1117",
-            font_color="#e6edf3",
-            height=420,
+            title=dict(
+                text=f"SUCCESS RATE — {sel_matcher.upper()} / {sel_protocol} / {sel_factor}",
+                font=dict(color="#5b7ba8", size=11, family="Share Tech Mono"),
+            ),
+            xaxis=dict(title="SUN AZIMUTH (°)", tickfont=dict(family="Share Tech Mono", color="#5b7ba8", size=10)),
+            yaxis=dict(title="SUN ELEVATION (°)", tickfont=dict(family="Share Tech Mono", color="#5b7ba8", size=10)),
+            plot_bgcolor="#070b14", paper_bgcolor="#0a1020",
+            font_color="#c8d8e8", height=380,
+            margin=dict(l=60, r=20, t=50, b=60),
         )
         st.plotly_chart(fig_s, use_container_width=True)
 
-        st.subheader(f"Mean Correct Matches  —  {sel_matcher.upper()}")
         azs2, els2, z_corr = pivot_correct(rows, sel_matcher, sel_protocol, sel_factor)
         text_corr = [[str(v) if v is not None else "–" for v in row_z] for row_z in z_corr]
         fig_c = go.Figure(go.Heatmap(
-            x=[str(a) for a in azs2],
-            y=[str(e) for e in els2],
+            x=[f"{a}°" for a in azs2],
+            y=[f"{e}°" for e in els2],
             z=z_corr,
             text=text_corr,
             texttemplate="%{text}",
-            colorscale="Viridis",
-            colorbar=dict(title="Correct matches"),
+            colorscale="Blues",
+            colorbar=dict(
+                title=dict(text="CORRECT MATCHES", font=dict(color="#5b7ba8", size=10, family="Share Tech Mono")),
+                tickfont=dict(color="#5b7ba8", family="Share Tech Mono", size=9),
+                thickness=12, len=0.8,
+            ),
         ))
         fig_c.update_layout(
-            xaxis_title="Sun Azimuth (°)",
-            yaxis_title="Sun Elevation (°)",
-            plot_bgcolor="#0d1117",
-            paper_bgcolor="#0d1117",
-            font_color="#e6edf3",
-            height=420,
+            title=dict(
+                text=f"CORRECT MATCH COUNT — {sel_matcher.upper()}",
+                font=dict(color="#5b7ba8", size=11, family="Share Tech Mono"),
+            ),
+            xaxis=dict(title="SUN AZIMUTH (°)", tickfont=dict(family="Share Tech Mono", color="#5b7ba8", size=10)),
+            yaxis=dict(title="SUN ELEVATION (°)", tickfont=dict(family="Share Tech Mono", color="#5b7ba8", size=10)),
+            plot_bgcolor="#070b14", paper_bgcolor="#0a1020",
+            font_color="#c8d8e8", height=380,
+            margin=dict(l=60, r=20, t=50, b=60),
         )
         st.plotly_chart(fig_c, use_container_width=True)
 
-# ─── Tab 2: All-matchers comparison bar ──────────────────────────────────────
-with tab2:
-    st.subheader("Overall Success Rate by Matcher")
 
-    # Success by matcher (all protocols, all factors)
+# ─── Tab 2: All-matchers comparison ──────────────────────────────────────────
+with tab2:
+    st.caption(
+        "Compares all 6 matchers side-by-side. "
+        "Green (≥85%), amber (40–84%), red (<40%). "
+        "Below: per-elevation breakdown shows which matchers degrade at low Sun angles."
+    )
+
     by_matcher = defaultdict(lambda: [0, 0])
     for r in rows:
         m = r["matcher"]
@@ -282,43 +526,66 @@ with tab2:
             by_matcher[m][0] += 1
 
     sorted_m = sorted(by_matcher.keys(), key=lambda m: by_matcher[m][0] / by_matcher[m][1], reverse=True)
-    rates = [by_matcher[m][0] / by_matcher[m][1] * 100 for m in sorted_m]
-    colors = ["#2ea043" if r >= _GREEN_THRESH * 100 else "#d29922" if r >= _AMBER_THRESH * 100 else "#f85149"
-              for r in rates]
+    rates    = [by_matcher[m][0] / by_matcher[m][1] * 100 for m in sorted_m]
+    bar_colors = [
+        "#39d353" if r >= _GREEN_THRESH * 100 else "#e3b341" if r >= _AMBER_THRESH * 100 else "#ff4b4b"
+        for r in rates
+    ]
 
     fig_bar = go.Figure(go.Bar(
-        x=sorted_m,
-        y=rates,
-        marker_color=colors,
+        x=sorted_m, y=rates,
+        marker_color=bar_colors,
+        marker_line=dict(color="#1a2540", width=1),
         text=[f"{r:.1f}%" for r in rates],
         textposition="outside",
+        textfont=dict(family="Share Tech Mono", color="#c8d8e8", size=11),
     ))
+    fig_bar.add_hline(y=85, line_dash="dot", line_color="#39d353", line_width=1,
+                      annotation_text="GREEN 85%",
+                      annotation_font=dict(color="#39d353", size=9, family="Share Tech Mono"))
+    fig_bar.add_hline(y=40, line_dash="dot", line_color="#e3b341", line_width=1,
+                      annotation_text="AMBER 40%",
+                      annotation_font=dict(color="#e3b341", size=9, family="Share Tech Mono"))
     fig_bar.update_layout(
-        yaxis=dict(title="Success Rate (%)", range=[0, 108], ticksuffix="%"),
-        plot_bgcolor="#0d1117",
-        paper_bgcolor="#0d1117",
-        font_color="#e6edf3",
-        height=380,
-        showlegend=False,
+        title=dict(text="OVERALL SUCCESS RATE BY MATCHER", font=dict(color="#5b7ba8", size=11, family="Share Tech Mono")),
+        yaxis=dict(title="SUCCESS RATE (%)", range=[0, 115], ticksuffix="%",
+                   tickfont=dict(family="Share Tech Mono", color="#5b7ba8", size=9),
+                   gridcolor="#111d30"),
+        xaxis=dict(tickfont=dict(family="Share Tech Mono", color="#c8d8e8", size=10)),
+        plot_bgcolor="#070b14", paper_bgcolor="#0a1020",
+        font_color="#c8d8e8", height=360, showlegend=False, bargap=0.3,
+        margin=dict(l=60, r=20, t=50, b=60),
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
-    # Per-matcher summary cards
-    st.subheader("Matcher Summary Cards")
+    st.markdown(
+        "<div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;"
+        "letter-spacing:0.08em;color:#2a6496;margin:12px 0 6px;'>◈ MATCHER STATUS CARDS</div>",
+        unsafe_allow_html=True,
+    )
     cols = st.columns(len(sorted_m))
     for col, m in zip(cols, sorted_m):
         s, t = by_matcher[m]
         rate = s / t
-        trust_name, trust_icon = _trust(rate)
-        css_class = f"trust-{trust_name.lower()}"
-        col.markdown(f"**{m}**")
-        col.markdown(f"<span class='{css_class}'>{trust_icon} {trust_name}</span>", unsafe_allow_html=True)
-        col.metric("Success", f"{rate:.1%}", f"{s}/{t} cells")
+        trust_name, _ = _trust(rate)
+        border_c = "#39d353" if trust_name == "GREEN" else "#e3b341" if trust_name == "AMBER" else "#ff4b4b"
+        val_c    = border_c
+        col.markdown(
+            f"<div style='background:#0d1525;border:1px solid #1e2e4a;"
+            f"border-top:2px solid {border_c};border-radius:3px;padding:10px;text-align:center;'>"
+            f"<div style='font-family:Share Tech Mono,monospace;font-size:0.72rem;color:#5b7ba8;margin-bottom:4px;'>{m.upper()}</div>"
+            f"<div style='font-family:Share Tech Mono,monospace;font-size:1.3rem;font-weight:700;color:{val_c};'>{rate:.0%}</div>"
+            f"<div style='font-size:0.68rem;color:#5b7ba8;font-family:Share Tech Mono,monospace;'>{trust_name}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
     st.divider()
-
-    # Per-elevation breakdown
-    st.subheader("Success Rate by Elevation (all matchers)")
+    st.markdown(
+        "<div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;"
+        "letter-spacing:0.08em;color:#2a6496;margin:12px 0 6px;'>◈ DEGRADATION BY ELEVATION</div>",
+        unsafe_allow_html=True,
+    )
     el_matcher_rate = defaultdict(lambda: defaultdict(lambda: [0, 0]))
     for r in rows:
         el_matcher_rate[r["el"]][r["matcher"]][1] += 1
@@ -327,154 +594,288 @@ with tab2:
 
     els_sorted = sorted(el_matcher_rate.keys())
     fig_el = go.Figure()
-    color_map = {
-        "minima": "#2ea043",
-        "superpoint-lightglue": "#388bfd",
-        "loftr": "#bc8cff",
-        "sift": "#f0883e",
-        "orb": "#f85149",
-        "aliked-lightglue": "#79c0ff",
-    }
     for m in sorted_m:
         y_vals = []
         for el in els_sorted:
             s, t = el_matcher_rate[el][m]
             y_vals.append(s / t * 100 if t > 0 else None)
         fig_el.add_trace(go.Scatter(
-            x=[str(e) for e in els_sorted],
-            y=y_vals,
-            name=m,
-            mode="lines+markers",
-            line=dict(color=color_map.get(m, "#888"), width=2),
-            marker=dict(size=8),
+            x=[f"{e}°" for e in els_sorted], y=y_vals,
+            name=m, mode="lines+markers",
+            line=dict(color=_COLOR_MAP.get(m, "#888"), width=2),
+            marker=dict(size=7, symbol="circle"),
         ))
-    fig_el.add_hline(y=_GREEN_THRESH * 100, line_dash="dash", line_color="#2ea043",
-                     annotation_text="GREEN threshold", annotation_font_color="#2ea043")
-    fig_el.add_hline(y=_AMBER_THRESH * 100, line_dash="dash", line_color="#d29922",
-                     annotation_text="AMBER threshold", annotation_font_color="#d29922")
+    fig_el.add_hline(y=85, line_dash="dot", line_color="#39d353", line_width=1)
+    fig_el.add_hline(y=40, line_dash="dot", line_color="#e3b341", line_width=1)
     fig_el.update_layout(
-        xaxis_title="Sun Elevation (°)",
-        yaxis=dict(title="Success Rate (%)", range=[0, 108], ticksuffix="%"),
-        plot_bgcolor="#0d1117",
-        paper_bgcolor="#0d1117",
-        font_color="#e6edf3",
-        legend=dict(bgcolor="#161b22", bordercolor="#21262d"),
-        height=450,
+        xaxis=dict(title="SUN ELEVATION (°)", tickfont=dict(family="Share Tech Mono", color="#5b7ba8", size=9)),
+        yaxis=dict(title="SUCCESS RATE (%)", range=[0, 108], ticksuffix="%",
+                   tickfont=dict(family="Share Tech Mono", color="#5b7ba8", size=9),
+                   gridcolor="#111d30"),
+        plot_bgcolor="#070b14", paper_bgcolor="#0a1020",
+        font_color="#c8d8e8",
+        legend=dict(bgcolor="#0d1525", bordercolor="#1e2e4a",
+                    font=dict(family="Share Tech Mono", size=10)),
+        height=420,
+        margin=dict(l=60, r=20, t=20, b=60),
     )
     st.plotly_chart(fig_el, use_container_width=True)
 
+
 # ─── Tab 3: Router probe ──────────────────────────────────────────────────────
 with tab3:
-    st.subheader("🤖 Atlas-Driven Trust Router")
-    st.markdown(
-        "Simulates the router decision for any sun-angle query. "
-        "Use the sidebar sliders to set the query azimuth and elevation."
+    st.caption(
+        "The trust router picks the best matcher for a given sun angle based on atlas data. "
+        "GREEN = atlas shows ≥85% success — safe to trust. "
+        "RED = <40% — refuse to match rather than risk a false positive."
     )
 
     atlas_rates = build_atlas_rates(rows)
-
     az_bin = _snap(probe_az, _AZ_GRID)
     el_bin = _snap(probe_el, _EL_GRID)
 
-    st.markdown(f"**Query:** az = {probe_az}° el = {probe_el}°  →  "
-                f"Snapped to atlas cell az = **{az_bin}°** el = **{el_bin}°**")
+    left_col, right_col = st.columns([1, 2])
 
-    # Walk cascade
-    router_rows = []
-    recommended = None
-    for m in _MATCHER_CASCADE:
-        if m not in atlas_rates:
-            router_rows.append({"Matcher": m, "Success Rate": "—", "Trust": "N/A", "Status": "not in atlas"})
-            continue
-        cell_rates = atlas_rates[m]
-        rate = cell_rates.get((az_bin, el_bin), None)
-        if rate is None:
-            el_rates = [v for (a, e), v in cell_rates.items() if e == el_bin]
-            rate = sum(el_rates) / len(el_rates) if el_rates else 0.0
-        trust_name, trust_icon = _trust(rate)
-        status = "✅ RECOMMENDED" if recommended is None and trust_name != "RED" else ""
-        if recommended is None and trust_name != "RED":
-            recommended = (m, rate, trust_name, trust_icon)
-        router_rows.append({
-            "Matcher": m,
-            "Success Rate": f"{rate:.0%}",
-            "Trust": f"{trust_icon} {trust_name}",
-            "Status": status,
-        })
+    with left_col:
+        st.markdown(
+            f"<div style='font-family:Share Tech Mono,monospace;'>"
+            f"<div style='font-size:0.7rem;color:#5b7ba8;letter-spacing:0.1em;'>◈ QUERY INPUT</div>"
+            f"<div style='font-size:1.6rem;color:#79c0ff;margin:6px 0;'>AZ {probe_az:03d}° &nbsp; EL {probe_el:02d}°</div>"
+            f"<div style='font-size:0.8rem;color:#2a6496;'>↳ Snapped → AZ <b style='color:#58a6ff;'>{az_bin}°</b>"
+            f" &nbsp; EL <b style='color:#58a6ff;'>{el_bin}°</b></div></div>",
+            unsafe_allow_html=True,
+        )
+        router_compass = make_polar_compass(probe_az, probe_el)
+        st.plotly_chart(router_compass, use_container_width=True, config={"displayModeBar": False})
 
-    if recommended:
-        m_rec, rate_rec, trust_rec, icon_rec = recommended
-        css = f"trust-{trust_rec.lower()}"
-        protocol_rec = "stretch_2_98" if el_bin <= 5 else "raw"
-        st.markdown(f"""
-<div style='background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin:12px 0;'>
-  <div style='font-size:1.3rem;font-weight:700;'>🤖 Router Decision</div>
-  <div style='margin-top:8px;'>
-    <b>Matcher:</b> <code>{m_rec}</code> &nbsp;|&nbsp;
-    <b>Protocol:</b> <code>{protocol_rec}</code> &nbsp;|&nbsp;
-    <b>Trust:</b> <span class='{css}'>{icon_rec} {trust_rec}</span><br/>
-    <b>Estimated success rate:</b> {rate_rec:.0%}
+    with right_col:
+        router_rows = []
+        recommended = None
+        for m in _MATCHER_CASCADE:
+            if m not in atlas_rates:
+                router_rows.append({"m": m, "rate": None, "trust": "N/A", "status": "not in atlas"})
+                continue
+            cell_rates = atlas_rates[m]
+            rate = cell_rates.get((az_bin, el_bin), None)
+            if rate is None:
+                el_rates = [v for (a, e), v in cell_rates.items() if e == el_bin]
+                rate = sum(el_rates) / len(el_rates) if el_rates else 0.0
+            trust_name, _ = _trust(rate)
+            status = "◀ RECOMMENDED" if recommended is None and trust_name != "RED" else ""
+            if recommended is None and trust_name != "RED":
+                recommended = (m, rate, trust_name)
+            router_rows.append({"m": m, "rate": rate, "trust": trust_name, "status": status})
+
+        if recommended:
+            m_rec, rate_rec, trust_rec = recommended
+            protocol_rec = "stretch_2_98" if el_bin <= 5 else "raw"
+            trust_color = "#39d353" if trust_rec == "GREEN" else "#e3b341" if trust_rec == "AMBER" else "#ff4b4b"
+            st.markdown(f"""
+<div class="router-box">
+  <div style='font-size:0.7rem;color:#2a6496;letter-spacing:0.1em;margin-bottom:6px;'>◈ ROUTER DECISION</div>
+  <div style='font-size:1.1rem;color:#e8f4ff;'><span style='color:#5b7ba8;'>MATCHER:</span> <b style='color:#79c0ff;'>{m_rec}</b></div>
+  <div style='font-size:0.9rem;color:#9ab8d4;margin-top:4px;'><span style='color:#5b7ba8;'>PROTOCOL:</span> {protocol_rec}</div>
+  <div style='font-size:0.9rem;color:#9ab8d4;margin-top:2px;'><span style='color:#5b7ba8;'>SUCCESS RATE:</span>
+    <b style='color:{trust_color};'>{rate_rec:.0%}</b> &nbsp;
+    <span style='color:{trust_color};'>● {trust_rec}</span>
   </div>
-</div>
-""", unsafe_allow_html=True)
-    else:
-        st.markdown("""
-<div style='background:#1a0a0a;border:1px solid #f85149;border-radius:10px;padding:16px;margin:12px 0;'>
-  <span class='trust-red'>🔴 RED LIGHT — No matcher achieves ≥40% success at this sun angle.<br/>
-  Refusing to match to avoid false correspondences.</span>
-</div>
-""", unsafe_allow_html=True)
+</div>""", unsafe_allow_html=True)
+        else:
+            st.markdown("""
+<div class="router-box-red">
+  <div style='font-size:0.7rem;color:#7a2020;letter-spacing:0.1em;margin-bottom:6px;'>◈ ROUTER DECISION</div>
+  <div style='font-size:1rem;color:#ff4b4b;'>● RED LIGHT — NO MATCHER ACHIEVES ≥40% SUCCESS</div>
+  <div style='font-size:0.8rem;color:#7a2020;margin-top:4px;'>Refusing to match. False correspondences likely at this sun geometry.</div>
+</div>""", unsafe_allow_html=True)
 
-    # Show cascade table
-    st.markdown("**Full cascade:**")
-    header_cols = st.columns([2, 1.5, 1.5, 2])
-    for h, col in zip(["Matcher", "Success Rate", "Trust", "Status"], header_cols):
-        col.markdown(f"**{h}**")
-    for rr in router_rows:
-        c1, c2, c3, c4 = st.columns([2, 1.5, 1.5, 2])
-        c1.markdown(f"`{rr['Matcher']}`")
-        c2.markdown(rr["Success Rate"])
-        c3.markdown(rr["Trust"])
-        c4.markdown(rr["Status"])
+        st.markdown(
+            "<div style='font-family:Share Tech Mono,monospace;font-size:0.7rem;"
+            "color:#2a6496;margin:14px 0 4px;letter-spacing:0.1em;'>◈ FULL CASCADE</div>",
+            unsafe_allow_html=True,
+        )
+        tbl = (
+            "<table style='width:100%;border-collapse:collapse;"
+            "font-family:Share Tech Mono,monospace;font-size:0.82rem;'>"
+            "<thead><tr>"
+            + "".join(
+                f"<th style='padding:6px 10px;text-align:left;color:#2a6496;"
+                f"border-bottom:1px solid #1a2540;font-weight:400;letter-spacing:0.06em;'>{h}</th>"
+                for h in ["MATCHER", "SUCCESS", "TRUST", "STATUS"]
+            )
+            + "</tr></thead><tbody>"
+        )
+        for rr in router_rows:
+            tn = rr["trust"]
+            tc = "#39d353" if tn == "GREEN" else "#e3b341" if tn == "AMBER" else "#ff4b4b" if tn == "RED" else "#5b7ba8"
+            rate_str = f"{rr['rate']:.0%}" if rr["rate"] is not None else "—"
+            rec_c = "#58a6ff" if rr["status"] else "#5b7ba8"
+            tbl += (
+                f"<tr style='border-bottom:1px solid #0f1a2e;'>"
+                f"<td style='padding:6px 10px;color:#c8d8e8;'>{rr['m']}</td>"
+                f"<td style='padding:6px 10px;text-align:center;color:{tc};'>{rate_str}</td>"
+                f"<td style='padding:6px 10px;text-align:center;color:{tc};'>● {tn}</td>"
+                f"<td style='padding:6px 10px;color:{rec_c};'>{rr['status']}</td>"
+                f"</tr>"
+            )
+        tbl += "</tbody></table>"
+        st.markdown(tbl, unsafe_allow_html=True)
 
-# ─── Tab 4: Raw data ──────────────────────────────────────────────────────────
+
+# ─── Tab 4: 3-D surface ──────────────────────────────────────────────────────
 with tab4:
-    st.subheader("Raw Atlas Data")
+    st.caption(
+        "3-D success-rate landscape over the sun-angle grid. "
+        "Height = success rate (%). Rotate with mouse. "
+        "Red valleys = dangerous sun geometries. Green peaks = reliable zones. "
+        "Dots = real atlas measurement points."
+    )
+
+    azs_3d, els_3d, z_3d = pivot_success(rows, sel_matcher, sel_protocol, sel_factor)
+
+    if not azs_3d:
+        st.warning("No data for this combination of filters.")
+    else:
+        import numpy as np
+
+        az_arr = np.array([float(a) for a in azs_3d])
+        el_arr = np.array([float(e) for e in els_3d])
+        z_arr  = np.array(
+            [[v if v is not None else 0 for v in row_z] for row_z in z_3d],
+            dtype=float,
+        )
+        az_grid, el_grid = np.meshgrid(az_arr, el_arr)
+
+        fig_3d = go.Figure(data=[go.Surface(
+            x=az_grid, y=el_grid, z=z_arr,
+            colorscale=[[0, "#3d0505"], [0.4, "#6b2a0a"], [0.85, "#0d3318"], [1.0, "#39d353"]],
+            cmin=0, cmax=100,
+            contours=dict(
+                z=dict(show=True, usecolormap=True, highlightcolor="#79c0ff", project_z=True),
+            ),
+            colorbar=dict(
+                title=dict(text="SUCCESS %", font=dict(color="#5b7ba8", size=10, family="Share Tech Mono")),
+                ticksuffix="%",
+                tickfont=dict(color="#5b7ba8", family="Share Tech Mono", size=9),
+                thickness=12,
+            ),
+            lighting=dict(ambient=0.7, diffuse=0.6, specular=0.3, roughness=0.5),
+            opacity=0.92,
+        )])
+
+        # Scatter dots at actual measurement points
+        sx, sy, sz = [], [], []
+        for el_i, el_v in enumerate(els_3d):
+            for az_i, az_v in enumerate(azs_3d):
+                v = z_3d[el_i][az_i]
+                if v is not None:
+                    sx.append(float(az_v))
+                    sy.append(float(el_v))
+                    sz.append(v)
+
+        fig_3d.add_trace(go.Scatter3d(
+            x=sx, y=sy, z=sz,
+            mode="markers",
+            marker=dict(
+                size=5,
+                color=sz,
+                colorscale=[[0, "#ff4b4b"], [1, "#39d353"]],
+                cmin=0, cmax=100,
+                symbol="circle",
+                line=dict(color="#1a2540", width=1),
+            ),
+            showlegend=False,
+            hovertemplate="AZ: %{x}°<br>EL: %{y}°<br>Success: %{z:.0f}%<extra></extra>",
+        ))
+
+        fig_3d.update_layout(
+            scene=dict(
+                xaxis=dict(
+                    title="AZIMUTH (°)",
+                    tickfont=dict(family="Share Tech Mono", color="#5b7ba8", size=9),
+                    gridcolor="#111d30", backgroundcolor="#070b14", zerolinecolor="#1a2540",
+                ),
+                yaxis=dict(
+                    title="ELEVATION (°)",
+                    tickfont=dict(family="Share Tech Mono", color="#5b7ba8", size=9),
+                    gridcolor="#111d30", backgroundcolor="#070b14", zerolinecolor="#1a2540",
+                ),
+                zaxis=dict(
+                    title="SUCCESS %", ticksuffix="%", range=[0, 100],
+                    tickfont=dict(family="Share Tech Mono", color="#5b7ba8", size=9),
+                    gridcolor="#111d30", backgroundcolor="#070b14",
+                ),
+                bgcolor="#070b14",
+            ),
+            margin=dict(l=0, r=0, b=0, t=40),
+            height=580,
+            paper_bgcolor="#0a1020",
+            font_color="#c8d8e8",
+            title=dict(
+                text=f"3-D SUCCESS LANDSCAPE — {sel_matcher.upper()}",
+                font=dict(color="#5b7ba8", size=11, family="Share Tech Mono"),
+            ),
+        )
+        st.plotly_chart(fig_3d, use_container_width=True)
+
+
+# ─── Tab 5: Raw data ──────────────────────────────────────────────────────────
+with tab5:
+    st.caption(
+        "Every row from results/atlas.csv for the selected matcher/protocol/factor. "
+        "✓ = success, ✗ = failed. These are the raw numbers behind every chart above."
+    )
+
     filt_rows = [r for r in rows
-                 if r["matcher"] == sel_matcher
+                 if r["matcher"]  == sel_matcher
                  and r["protocol"] == sel_protocol
-                 and r["factor"] == sel_factor]
+                 and r["factor"]   == sel_factor]
 
     display_cols = ["matcher", "protocol", "factor", "az", "el",
                     "matches", "correct", "grid_err", "success", "runtime"]
 
-    # Build a simple HTML table
-    html_rows = "".join(
-        "<tr>" + "".join(
-            f"<td style='padding:4px 10px;border-bottom:1px solid #21262d;"
-            f"color:{'#2ea043' if col=='success' and r.get(col) else '#f85149' if col=='success' else '#e6edf3'};'>"
-            f"{('✓' if r[col] else '✗') if col=='success' else (f'{r[col]:.3f}' if isinstance(r.get(col), float) and col not in ('runtime',) else r.get(col, ''))}</td>"
+    th = (
+        "<table style='border-collapse:collapse;width:100%;"
+        "font-family:Share Tech Mono,monospace;font-size:0.78rem;'>"
+        "<thead><tr>"
+        + "".join(
+            f"<th style='padding:6px 12px;text-align:left;color:#2a6496;"
+            f"border-bottom:1px solid #1a2540;letter-spacing:0.06em;font-weight:400;'>{c.upper()}</th>"
+            for c in display_cols
+        )
+        + "</tr></thead><tbody>"
+    )
+    td = "".join(
+        "<tr style='border-bottom:1px solid #0f1a2e;'>"
+        + "".join(
+            f"<td style='padding:5px 12px;"
+            f"color:{'#39d353' if col == 'success' and r.get(col) else '#ff4b4b' if col == 'success' else '#9ab8d4'};'>"
+            f"{('✓' if r[col] else '✗') if col == 'success' else (f'{r[col]:.3f}' if isinstance(r.get(col), float) and col == 'grid_err' else f'{r[col]:.1f}s' if col == 'runtime' else r.get(col, ''))}"
+            f"</td>"
             for col in display_cols
-        ) + "</tr>"
+        )
+        + "</tr>"
         for r in filt_rows[:500]
     )
-    html_header = "<tr>" + "".join(
-        f"<th style='padding:4px 10px;text-align:left;color:#8b949e;border-bottom:2px solid #21262d;'>{c}</th>"
-        for c in display_cols
-    ) + "</tr>"
     st.markdown(
-        f"<div style='overflow-x:auto;'><table style='border-collapse:collapse;width:100%;font-size:0.82rem;'>"
-        f"<thead>{html_header}</thead><tbody>{html_rows}</tbody></table></div>"
-        + (f"<p style='color:#8b949e;font-size:0.8rem;margin-top:6px;'>Showing first 500 of {len(filt_rows)} rows.</p>" if len(filt_rows) > 500 else ""),
+        f"<div style='overflow-x:auto;background:#0a1020;border:1px solid #1a2540;"
+        f"border-radius:4px;padding:4px;'>{th}{td}</tbody></table></div>"
+        + (
+            f"<p style='color:#5b7ba8;font-size:0.72rem;font-family:Share Tech Mono,monospace;"
+            f"margin-top:6px;'>Showing first 500 of {len(filt_rows)} rows.</p>"
+            if len(filt_rows) > 500 else ""
+        ),
         unsafe_allow_html=True,
     )
+
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.divider()
 st.markdown(
-    "<p style='text-align:center;color:#484f58;font-size:0.8rem;'>"
-    "LunarAlign · SIH 2026 · PS 26166 · "
-    "Pipeline: LOLA DEM → Sun-Sweep Atlas → Trust Router → Image Correspondence"
+    "<p style='text-align:center;color:#1e3558;font-size:0.72rem;"
+    "font-family:Share Tech Mono,monospace;letter-spacing:0.06em;'>"
+    "LUNARIGN · SIH 2026 · PS 26166 · "
+    "PIPELINE: LOLA DEM → SUN-SWEEP ATLAS → TRUST ROUTER → IMAGE CORRESPONDENCE"
     "</p>",
     unsafe_allow_html=True,
 )
+

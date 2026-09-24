@@ -12,7 +12,8 @@ Usage:
 Fallback outputs in  demo_fallback/
 """
 import sys, os, time, argparse, hashlib
-
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
 # ── Simulator integrity check ─────────────────────────────────────
 _here = os.path.dirname(os.path.abspath(__file__))
 _EXPECTED_HASHES = {
@@ -52,8 +53,8 @@ PX_M       = 20.0                           # metres per pixel
 # Slide 2 — four illumination conditions (same DEM, nadir camera)
 REF_AZ,  REF_EL  = 270.0, 40.0             # reference: Sun from West, mid-elevation
 FLIP_AZ, FLIP_EL =  90.0, 40.0             # 180° azimuth flip
-GRZ_AZ,  GRZ_EL  = 270.0, 5.0             # grazing Sun (same direction)
-GRF_AZ,  GRF_EL  =  90.0, 5.0             # grazing + flipped
+GRZ_AZ,  GRZ_EL  = 270.0, 10.0             # grazing Sun (same direction)
+GRF_AZ,  GRF_EL  =  90.0, 10.0             # grazing + flipped
 
 # Slide 3 — ORB matcher collapse
 ROT0_AZ,  ROT0_EL  = 270.0, 40.0           # 0° Sun rotation (= reference)
