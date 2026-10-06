@@ -31,6 +31,12 @@ try:
 except ImportError:
     _VISMATCH_AVAILABLE = False
 
+try:
+    from sensors import get_sensor, SensorPair, SENSOR_PAIRS
+    _SENSORS_AVAILABLE = True
+except ImportError:
+    _SENSORS_AVAILABLE = False
+
 
 # ── Atlas loader ──────────────────────────────────────────────────────────────
 
@@ -50,8 +56,9 @@ def load_atlas(atlas_path="results/atlas.csv"):
     with open(atlas_path, newline="") as f:
         for row in csv.DictReader(f):
             m = row["matcher"]
-            az = int(row["az"])
-            el = int(row["el"])
+            az_str = row.get("az") or row.get("delta_az") or row.get("abs_az") or "0"
+            az = int(float(az_str))
+            el = int(float(row["el"]))
             acc[m][(az, el)][1] += 1
             if row["success"] == "True":
                 acc[m][(az, el)][0] += 1
@@ -310,17 +317,94 @@ def run_matcher_pipeline(img1, img2, matcher_name, protocol="raw", scratch_dir="
     }
 
 
-# ── High-level entry point ────────────────────────────────────────────────────
+# ── Cross-sensor trust penalty ────────────────────────────────────────────────
 
-def route_and_match(img1, img2, az1, el1, az2=None, el2=None,
-                    atlas_path="results/atlas.csv", scratch_dir="data/scratch"):
-    """Full routing + matching pipeline.
+def _cross_sensor_penalty(scale_ratio: float) -> float:
+    """Reduce trust confidence based on sensor pair scale ratio.
+
+    Cross-sensor matching is harder than same-sensor matching. A 17× scale
+    difference (OHRC↔TMC-2) reduces the effective success rate significantly;
+    a 267× difference (OHRC↔IIRS) makes most matchers fail.
+
+    Returns a multiplier in (0, 1] to apply to the atlas success rate.
+    """
+    if scale_ratio <= 1.5:
+        return 1.0          # same sensor or near-same
+    elif scale_ratio <= 20:
+        return 0.6          # moderate (OHRC↔TMC-2, TMC-2↔IIRS)
+    elif scale_ratio <= 100:
+        return 0.3          # hard
+    else:
+        return 0.1          # extreme (OHRC↔IIRS: 267×)
+
+
+def get_best_matcher_cross_sensor(az, el, sensor_a_name, sensor_b_name,
+                                  atlas=None):
+    """Return routing decision for a cross-sensor match.
+
+    Wraps get_best_matcher() but applies a scale-ratio penalty to the
+    estimated success rate, making the trust level more conservative
+    for difficult sensor pairs.
 
     Parameters
     ----------
-    img1, img2 : np.ndarray uint8 grayscale — images to match
-    az1, el1   : float — sun angle for image 1 (reference)
-    az2, el2   : float — sun angle for image 2; defaults to az1, el1 if None
+    sensor_a_name, sensor_b_name : str  — e.g. "OHRC", "TMC-2"
+
+    Returns
+    -------
+    matcher, protocol, trust, rate, scale_ratio, sensor_pair_key
+    """
+    # Get base routing (sun-angle only)
+    matcher, protocol, trust, rate = get_best_matcher(az, el, atlas)
+
+    scale_ratio = 1.0
+    pair_key = "same_sensor"
+
+    if _SENSORS_AVAILABLE and sensor_a_name and sensor_b_name:
+        try:
+            sa = get_sensor(sensor_a_name)
+            sb = get_sensor(sensor_b_name)
+            scale_ratio = max(sa.gsd_m, sb.gsd_m) / min(sa.gsd_m, sb.gsd_m)
+            pair_key = f"{sa.name}_x_{sb.name}".replace("-", "")
+        except KeyError:
+            pass
+
+    # Apply cross-sensor penalty
+    penalty = _cross_sensor_penalty(scale_ratio)
+    adjusted_rate = rate * penalty
+
+    # Recalculate trust with penalised rate
+    trust = (
+        "GREEN" if adjusted_rate >= _GREEN_THRESH
+        else "AMBER" if adjusted_rate >= _AMBER_THRESH
+        else "RED"
+    )
+
+    # For extreme scale ratios, prefer scale-invariant matchers
+    if scale_ratio > 10 and matcher in ("sift", "orb"):
+        # Swap to a deep-learning matcher if available in atlas
+        for alt in ["minima", "superpoint-lightglue", "loftr"]:
+            if atlas and alt in atlas:
+                matcher = alt
+                break
+
+    return matcher, protocol, trust, adjusted_rate, scale_ratio, pair_key
+
+
+# ── High-level entry point ────────────────────────────────────────────────────
+
+def route_and_match(img1, img2, az1, el1, az2=None, el2=None,
+                    sensor1=None, sensor2=None,
+                    atlas_path="results/atlas.csv", scratch_dir="data/scratch"):
+    """Full routing + matching pipeline (single-sensor or cross-sensor).
+
+    Parameters
+    ----------
+    img1, img2   : np.ndarray uint8 grayscale — images to match
+    az1, el1     : float — sun angle for image 1 (reference)
+    az2, el2     : float — sun angle for image 2; defaults to az1, el1 if None
+    sensor1, sensor2 : str or None — sensor names for multi-modal routing
+                       e.g. "OHRC", "TMC-2", "IIRS"
 
     Returns
     -------
@@ -337,22 +421,42 @@ def route_and_match(img1, img2, az1, el1, az2=None, el2=None,
     el_use = min(el1, el2) if el2 is not None else el1
 
     atlas = load_atlas(atlas_path)
-    matcher, protocol, trust, rate = get_best_matcher(az_use, el_use, atlas)
+
+    # Cross-sensor routing if both sensors specified
+    if sensor1 and sensor2 and sensor1 != sensor2:
+        matcher, protocol, trust, rate, scale_ratio, pair_key = \
+            get_best_matcher_cross_sensor(
+                az_use, el_use, sensor1, sensor2, atlas
+            )
+        extra = {
+            "sensor_pair": pair_key,
+            "scale_ratio": scale_ratio,
+            "cross_sensor": True,
+        }
+    else:
+        matcher, protocol, trust, rate = get_best_matcher(
+            az_use, el_use, atlas
+        )
+        extra = {"cross_sensor": False}
 
     if trust == "RED":
-        return {
+        result = {
             "matcher": matcher,
             "runtime": 0.0,
             "raw_matches": 0,
             "is_valid": False,
             "transform": None,
-            "reason": f"RED trust light — estimated success rate {rate:.0%} at az={az_use}° el={el_use}°",
+            "reason": f"RED trust light — estimated success rate {rate:.0%} "
+                      f"at az={az_use}° el={el_use}°",
             "trust": trust,
             "estimated_success_rate": rate,
-        }, trust
+        }
+        result.update(extra)
+        return result, trust
 
     result = run_matcher_pipeline(img1, img2, matcher, protocol, scratch_dir)
     result["trust"] = trust
     result["estimated_success_rate"] = rate
     result["protocol"] = protocol
+    result.update(extra)
     return result, trust

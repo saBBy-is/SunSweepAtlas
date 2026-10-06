@@ -43,3 +43,39 @@ affine_params:
   scale: 1.1
   tx_px: 5.0
   ty_px: -3.0
+
+# ── Multi-Modal Sensor Profiles (PS 26166: OHRC, TMC-2, IIRS) ──
+sensors:
+  OHRC:
+    full_name: "Orbiter High Resolution Camera"
+    gsd_m: 0.3
+    swath_km: 3.0
+    spectral: "PAN 450-850 nm"
+    bands: 1
+  TMC2:
+    full_name: "Terrain Mapping Camera-2"
+    gsd_m: 5.0
+    swath_km: 20.0
+    spectral: "PAN 500-850 nm"
+    bands: 1
+  IIRS:
+    full_name: "Imaging Infrared Spectrometer"
+    gsd_m: 80.0
+    swath_km: 20.0
+    spectral: "VNIR+SWIR 800-5000 nm"
+    bands: 256
+
+# Cross-sensor matching configuration
+cross_sensor:
+  terrain:
+    extent_m: 2560.0
+    base_gsd_m: 2.0
+    seed: 42
+  pairs:
+    - [OHRC, TMC2]      # 17× scale ratio
+    - [TMC2, IIRS]      # 16× scale ratio
+    - [OHRC, IIRS]      # 267× scale ratio (extreme)
+  success:
+    max_grid_error_px: 5.0    # looser than single-sensor (resolution mismatch)
+    min_correct_matches: 10   # fewer features expected at coarse GSD
+  resample_strategy: "coarse" # downsample fine image to match coarse GSD

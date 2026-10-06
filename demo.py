@@ -43,6 +43,17 @@ from matplotlib.gridspec import GridSpec
 from sun_sim_v2 import horizon_map, render, to_uint8
 from synth_dem import make_dem
 
+# Try to import multi-modal modules
+try:
+    from sensors import OHRC, TMC2, IIRS, SENSOR_PAIRS
+    from multimodal import (
+        MultiScaleTerrain, render_sensor_view,
+        cross_sensor_ncc, prepare_cross_sensor_match,
+    )
+    _MULTIMODAL = True
+except ImportError:
+    _MULTIMODAL = False
+
 
 # ═══════════════════════════════════════════════════════════════════
 #  CONFIG  — matches the slide parameters exactly
@@ -102,6 +113,86 @@ def make_render(dem, az, el, hcache):
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  CROSS-SENSOR DEMO (multi-modal)
+# ═══════════════════════════════════════════════════════════════════
+
+def run_cross_sensor_demo(out_dir, show_panel=False):
+    """Demonstrate cross-sensor matching across OHRC, TMC-2, and IIRS."""
+    if not _MULTIMODAL:
+        print("  ⚠ Multi-modal modules not available — skipping cross-sensor demo.")
+        return
+
+    line = "-" * 62
+
+    print(f"\n  CROSS-SENSOR MULTI-MODAL DEMO")
+    print(f"  {line}")
+    print(f"  Generating multi-scale terrain (seed=42, 2560m, 2m/px base)...")
+
+    terrain = MultiScaleTerrain(
+        physical_extent_m=2560.0, base_gsd_m=2.0, seed=42
+    )
+
+    center = (terrain.extent_m / 2, terrain.extent_m / 2)
+    sensors = [OHRC, TMC2, IIRS]
+
+    # Render each sensor's view
+    print(f"\n  Rendering terrain as seen by each sensor (az=270°, el=40°):")
+    sensor_images = {}
+    for sensor in sensors:
+        max_sz = terrain.get_max_output_size(sensor)
+        use_sz = min(512, max_sz)
+        try:
+            img = render_sensor_view(
+                terrain, sensor, 270, 40, use_sz, center
+            )
+            sensor_images[sensor.name] = img
+            shadow = float(np.sum(img == 0)) / img.size
+            phys = use_sz * sensor.gsd_m
+            print(f"  │ {sensor.name:6s} │ GSD={sensor.gsd_m:5.1f}m │ "
+                  f"{img.shape[0]:>4d}×{img.shape[1]:>4d}px │ "
+                  f"covers {phys:>6.0f}m │ shadow {shadow:>5.1%} │")
+            cv2.imwrite(
+                os.path.join(out_dir, f"cross_sensor_{sensor.name.lower()}.png"),
+                img,
+            )
+        except ValueError as e:
+            print(f"  │ {sensor.name:6s} │ SKIPPED: {e}")
+
+    # Cross-sensor NCC
+    print(f"\n  Cross-sensor NCC (same sun angle, different resolution):")
+    for pair in SENSOR_PAIRS:
+        if pair.sensor_a.name in sensor_images and pair.sensor_b.name in sensor_images:
+            ncc_val = cross_sensor_ncc(
+                sensor_images[pair.sensor_a.name],
+                sensor_images[pair.sensor_b.name],
+            )
+            print(f"  │ {pair.name:20s} │ scale {pair.scale_ratio:>5.0f}× │ "
+                  f"NCC={ncc_val:+.3f} │")
+
+    # Cross-sensor ORB matching
+    print(f"\n  Cross-sensor ORB matching (identity geometry):")
+    for pair in SENSOR_PAIRS:
+        a_name = pair.sensor_a.name
+        b_name = pair.sensor_b.name
+        if a_name not in sensor_images or b_name not in sensor_images:
+            continue
+        img_a = sensor_images[a_name]
+        img_b = sensor_images[b_name]
+        try:
+            proc_a, proc_b, cgsd, sf = prepare_cross_sensor_match(
+                img_a, img_b, pair.sensor_a, pair.sensor_b
+            )
+            tot, cor, _, _, _ = orb_correct(proc_a, proc_b, thresh_px=5.0)
+            status = "✓" if cor >= 10 else "✗"
+            print(f"  │ {pair.name:20s} │ total={tot:>4d} correct={cor:>4d} │ "
+                  f"common_gsd={cgsd:>5.1f}m │ {status}")
+        except Exception as e:
+            print(f"  │ {pair.name:20s} │ ERROR: {e}")
+
+    print(f"  {line}")
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════
 
@@ -122,11 +213,11 @@ def main(show_panel=False):
     print(f"{hdr}\n")
 
     # ── 1.  Generate scene ────────────────────────────────────────
-    print("[1/4] Generating synthetic crater DEM (seed=42) …")
+    print("[1/5] Generating synthetic crater DEM (seed=42) …")
     dem = make_dem(DEM_SIZE, int(PX_M))
 
     # ── 2.  Slide 2: Sun-geometry renders + NCC ───────────────────
-    print("[2/4] Rendering four illumination conditions …")
+    print("[2/5] Rendering four illumination conditions …")
     img_ref  = make_render(dem, REF_AZ,  REF_EL,  hcache)
     img_flip = make_render(dem, FLIP_AZ, FLIP_EL, hcache)
     img_grz  = make_render(dem, GRZ_AZ,  GRZ_EL,  hcache)
@@ -149,7 +240,7 @@ def main(show_panel=False):
     print(f"    Drop from +1 = illumination destroys pixel agreement.\n")
 
     # ── 3.  Slide 3: ORB matcher collapse ─────────────────────────
-    print("[3/4] Running ORB matcher (10 000 features, cross-check) …")
+    print("[3/5] Running ORB matcher (10 000 features, cross-check) …")
     img_r0  = make_render(dem, ROT0_AZ,  ROT0_EL,  hcache)   # same illum
     img_r45 = make_render(dem, ROT45_AZ, ROT45_EL, hcache)   # 45° rotated
 
@@ -166,8 +257,12 @@ def main(show_panel=False):
     ratio = cor0 / max(cor45, 1)
     print(f"  ↳ {ratio:.0f}× collapse with just 45° Sun rotation!\n")
 
-    # ── 4.  Fallback outputs ──────────────────────────────────────
-    print("[4/4] Saving fallback to demo_fallback/ …")
+    # ── 4.  Cross-sensor multi-modal demo ─────────────────────────
+    print("[4/5] Cross-sensor multi-modal matching …")
+    run_cross_sensor_demo(OUT_DIR, show_panel)
+
+    # ── 5.  Fallback outputs ──────────────────────────────────────
+    print("[5/5] Saving fallback to demo_fallback/ …")
 
     # Individual images
     for name, img in [("reference", img_ref), ("180flip", img_flip),
@@ -242,9 +337,19 @@ def main(show_panel=False):
         f"  0° Sun rotation:  {cor0:,d} / {tot0:,d}",
         f"  45° Sun rotation: {cor45:,d} / {tot45:,d}",
         f"  Collapse ratio:   {ratio:.0f}x",
+        "",
+        "MULTI-MODAL SENSOR PROFILES:",
+        f"  OHRC:  GSD = 0.3 m/px  (Panchromatic)",
+        f"  TMC-2: GSD = 5.0 m/px  (Panchromatic)",
+        f"  IIRS:  GSD = 80  m/px  (VNIR+SWIR, 256 bands)",
+        "",
+        "CROSS-SENSOR SCALE RATIOS:",
+        f"  OHRC ↔ TMC-2:   17×",
+        f"  TMC-2 ↔ IIRS:   16×",
+        f"  OHRC ↔ IIRS:   267×",
     ]
     txt_path = os.path.join(OUT_DIR, "demo_results.txt")
-    with open(txt_path, "w") as f:
+    with open(txt_path, "w", encoding="utf-8") as f:
         f.write("\n".join(txt) + "\n")
 
     elapsed = time.time() - t0
@@ -264,3 +369,4 @@ if __name__ == "__main__":
     ap.add_argument("--show", action="store_true", help="Pop up the matplotlib panel")
     args = ap.parse_args()
     main(show_panel=args.show)
+

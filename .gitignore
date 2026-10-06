@@ -44,7 +44,12 @@ git_ops.py
 # PPTX backups and temp files
 *_backup*.pptx
 *_tmp.pptx
+SIH26166_*.pptx
+SIH26166_*.pdf
 
-# Presentation files (too large for git)
-*.pptx
-*.pdf
+# PPT update helper scripts (session-specific)
+update_slide*.py
+create_final_ppt.py
+
+# Allow the final verified presentation through
+!LunarAlign_SIH2026_PS26166_FINAL.pptx
