@@ -1,55 +1,72 @@
-# Python
+# ─── Python ─────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
 
-# Virtual environments
+# ─── Virtual Environments ───────────────────────────
 .env
-.venv
+.venv/
 env/
 venv/
-ENV/
-env.bak/
-venv.bak/
 
-# Project-specific scratch data
-data/scratch/
-demo_fallback/
-
-# Model weight caches (should never be committed)
-*.ckpt
-*.pth
-
-# VSCode / IDE
+# ─── IDE ────────────────────────────────────────────
 .vscode/
 .idea/
+*.swp
 
-# OS generated files
+# ─── OS ─────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# Test scripts (session-specific diagnostics)
-test_plausibility_*.py
+# ─── Model Weights ──────────────────────────────────
+*.ckpt
+*.pth
+*.pt
 
-# Session debris / extracted files
+# ─── Internal / Dev-Only Files ──────────────────────
+AGENT_CONTEXT.md
+MISSION_BRIEF.md
+SIH_WINNING_ROADMAP.md
+diagnostic_terminal.txt
+git_commit.py
+git_ops.py
+generate_mock_demo_images.py
+update_slide*.py
+create_final_ppt.py
+report.py
+run_honest_sweep.py
+run_negative_control_and_images.py
+test_plausibility_*.py
 res.txt
 slide2.xml
 slide5.xml
-diagnostic_terminal.txt
 requirements.txt.bak
-git_commit.py
-git_ops.py
+notebooks/
 
-# PPTX backups and temp files
-*_backup*.pptx
-*_tmp.pptx
+# ─── Old/Stale Results ──────────────────────────────
+results/atlas_full_sweep_backup.csv
+results/atlas_ppt_grid.csv
+results/ppt_render_*_el05.png
+
+# ─── Old Src Files ──────────────────────────────────
+src/data_loader.py
+src/diagnostic_run.py
+src/step1_match_test.py
+src/step1b_controls.py
+src/step2_loader.py
+src/test_step2.py
+src/sun_sim.py
+
+# ─── Scratch Data ───────────────────────────────────
+data/scratch/
+demo_fallback/
+
+# ─── Old PPTX / PDF Exports ────────────────────────
 SIH26166_*.pptx
 SIH26166_*.pdf
+*_backup*.pptx
+*_tmp.pptx
 
-# PPT update helper scripts (session-specific)
-update_slide*.py
-create_final_ppt.py
-
-# Allow the final verified presentation through
+# ─── Allow Final Deck ──────────────────────────────
 !LunarAlign_SIH2026_PS26166_FINAL.pptx

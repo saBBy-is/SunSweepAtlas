@@ -1,6 +1,0 @@
-matcher,protocol,factor,delta_az,abs_az,el,matches,correct,grid_err,success,ncc_vs_ref,runtime,terrain_id,timestamp
-sift,raw,A_identity,0,270,10,60,55,0.2041,True,0.558803,0.100,synth01,2026-09-23T21:13:19.973673+00:00
-orb,raw,A_identity,0,270,10,640,114,0.0000,True,0.558803,1.488,synth01,2026-09-23T21:13:21.497772+00:00
-loftr,raw,A_identity,0,270,10,475,1,114.9558,False,0.558803,308.456,synth01,2026-09-23T21:18:29.984102+00:00
-superpoint-lightglue,raw,A_identity,0,270,10,1018,1012,0.1478,True,0.558803,655.661,synth01,2026-09-23T21:29:25.684791+00:00
-aliked-lightglue,raw,A_identity,0,270,10,420,383,0.3249,True,0.558803,344.116,synth01,2026-09-23T21:35:09.831567+00:00
