@@ -100,7 +100,7 @@ LOLA DEM → Render → ├─── TMC-2 (5.0 m/px, PAN) ──┼→ 6 Matche
 | **SIFT** | Classical | 2/10 | Same illumination only |
 | **ORB** | Classical | 2/10 | Same illumination only |
 | **LoFTR** | Transformer | 6/10 | Moderate sun angle changes |
-| **SuperPoint+LightGlue** | Deep Learning | 7/10 | Wide sun angle range |
+| **SuperPoint+LightGlue** | Deep Learning | 8/10 | Wide sun angle range |
 | **ALIKED+LightGlue** | Deep Learning | 2/10 | Same illumination only |
 | **MINIMA** | Foundation Model | **10/10** | All conditions (best performer) |
 
